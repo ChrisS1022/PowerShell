@@ -1,0 +1,845 @@
+#Final Project 2.0
+
+#######################################
+#   Created By: Christopher Sprague   #
+#   Class: PowerShell(23275)          #
+#   Purpose: Final Script             #
+#      To Gather info about local     #
+#        and remote servers           #
+#   Date Created: 05/14/2023          #
+#######################################
+
+#Host Name
+    $Hostname = Hostname
+
+#Get Date(MM-DD-YYYY)
+
+    $Date = Get-Date -Format MM-dd-yyyy
+
+#Folder Location?
+    $fPath = "C:\$Hostname-INV-$Date.txt"
+    
+#Report run by?
+    $RunBy = Read-Host "Type your Full Name (First Last)"
+    Write-Output "Report Run By: $RunBy" | Out-File $fPath -append
+
+Write-Output "" | Out-File $fPath -append
+Write-Output "" | Out-File $fPath -append
+
+#CSV Import/Export
+        #CSV Path
+            $csvPath = Read-Host "Type the path of the file location (C:\file.csv)"
+
+        #Import the CSV file
+            $CSV = Import-Csv -Path $csvPath
+        
+        #Export CSV to TXT file
+            Write-Output "Remote Servers" | Out-File $fPath -append
+            Write-Output "----------------------" | Out-File $fPath -append
+
+            $CSV | Format-Table | Out-String | Out-File -FilePath $fPath -append
+
+Write-Output "" | Out-File $fPath -append
+
+#Report Path
+        $filePath = $fPath
+    #Check if the file exists
+        if (-not (Test-Path -Path $filePath)) {
+            New-Item -ItemType File -Path $filePath
+            Write-Output "File was created at $filePath"
+        } else {
+            Write-Output "File already exists at $filePath"
+        }
+
+#Computer Name
+    # Variable for getting the Computer Name
+        $computerName = $env:COMPUTERNAME
+
+    # Write the Computer Name
+        Write-Output "Computer Name" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+        Write-Output "$computerName" | Out-File $fPath -append
+
+    Write-Output "" | Out-File $fPath -append
+# Windows OS Version    
+    # Variable for getting the Win OS Version  
+    $osVersion = (Get-CimInstance -ClassName Win32_OperatingSystem).Version
+
+    # Write the OS Version
+        Write-Output "OS Version" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+        Write-Output "OS Version: $osVersion" | Out-File $fPath -append
+
+    Write-Output "" | Out-File $fPath -append    
+# Processor Information (Display Name, Manufacturer, Number of Cores)
+    # Variable for getting the Computer Name
+    $processorInfo = Get-CimInstance -ClassName Win32_Processor
+
+    # Write the Processor Information
+        foreach ($processor in $processorInfo) {
+            # Display Name
+                Write-Output "Processor Information" | Out-File $fPath -append
+                Write-Output "----------------------" | Out-File $fPath -append
+                Write-Output "Processor Name: $($processor.Name)" | Out-File $fPath -append
+            # Manufactuter
+                Write-Output "Manufacturer: $($processor.Manufacturer)" | Out-File $fPath -append
+            # Wite the Number of Cores
+                Write-Output "Number of Cores: $($processor.NumberOfCores)" | Out-File $fPath -append     
+        }
+        
+    Write-Output "" | Out-File $fPath -append    
+# Amount of Physical RAM
+    # Variable for getting Physical RAM
+    $physicalMemory = (Get-CimInstance -ClassName Win32_PhysicalMemory).Capacity
+
+    # Variable to Identify the total RAM
+        $totalRAM = [Math]::Round(([array]($physicalMemory) | Measure-Object -Sum).Sum / 1GB, 2)
+
+    # Write the total RAM
+        Write-Output "Physical Memory in GB" | Out-File $fPath -append 
+        Write-Output "----------------------" | Out-File $fPath -append 
+        Write-Output "Total Physical RAM: $totalRAM GB" | Out-File $fPath -append 
+    
+    Write-Output "" | Out-File $fPath -append    
+# List all Windows Roles and Features installed on the system
+    Write-Output "Windows Roles and Features" | Out-File $fPath -append
+    Write-Output "----------------------" | Out-File $fPath -append
+    $osSKU = (Get-WmiObject -Class Win32_OperatingSystem).OperatingSystemSKU
+    
+    if ($osSKU -in 7,8,9,10,12,13,14,39,40,41,42,43,44,45,48,49,50,51,58,62,63,64,65,69,72,76,84) {
+        Get-WindowsFeature | Where-Object {$_.InstallState -eq 'Installed'} | Select-Object Name | Out-File $fPath -append 
+        Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Format-Table -AutoSize | Out-File $fPath -append
+    } else{
+        Write-Output "This is not a server" | Out-File $fPath -append
+    }
+
+    Write-Output "" | Out-File $fPath -append
+# Test for whether the Remote Desktop Protocol is configured or not and write the results
+    # Registry key path
+        $regPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+
+    # Registry value name for RDP
+        $regValue = "fDenyTSConnections"
+
+    # Fetch the registry value
+        $rdpValue = (Get-ItemProperty -Path $regPath -Name $regValue).$regValue
+
+    # Check the RDP status and write the results
+    Write-Output "Remote Desktop Connection" | Out-File $fPath -append
+    Write-Output "----------------------" | Out-File $fPath -append
+
+        if ($rdpValue -eq 0) {
+            Write-Output "Remote Desktop Protocol is enabled." | Out-File $fPath -append
+        } else {
+            Write-Output "Remote Desktop Protocol is disabled." | Out-File $fPath -append
+        } 
+       
+    Write-Output "" | Out-File $fPath -append
+# Include the last 5 warning and error messages from the System and Application event logs
+    # Get last 5 warning and error messages from System event log
+        $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2,3} -MaxEvents 5
+
+    # Get last 5 warning and error messages from Application event log
+        $applicationEvents = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2,3} -MaxEvents 5
+
+        Write-Output "System Log Newest 5" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+
+        $systemEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize | Out-File $fPath -append
+
+        Write-Output "Application Log Newest 5" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+
+        $applicationEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize | Out-File $fPath -append
+
+
+# Report for Remote Servers
+    #Script Range
+#Import the necessary .NET class for secure strigs
+    Add-Type -AssemblyName System.Security
+
+foreach ($row in $CSV) {
+
+    #Set the computername, username and password
+        $computerName = $row.computername
+        $username = $row.username
+        $password = $row.password
+        $fPath2 = "C:\$computerName-INV-$Date.txt"
+
+    #Report Run By
+    Write-Output "Report Run By: $RunBy" | Out-File $fPath2 -append
+
+    Write-Output "" | Out-File $fPath2 -append
+    Write-Output "" | Out-File $fPath2 -append
+
+
+    #Convert password to a secure string
+        $securPassword = ConvertTo-SecureString $password -AsPlainText -Force
+
+    #Create the credential
+        $cred = New-Object System.Management.Automation.PSCredential($username, $securPassword)
+
+    #Remote to servers
+    Invoke-Command -ComputerName $computerName -Credential $cred -ScriptBlock {
+
+#Computer Name
+    # Variable for getting the Computer Name
+        $computerName = $env:COMPUTERNAME
+
+    # Write the Computer Name
+        Write-Output "Computer Name" 
+        Write-Output "----------------------" 
+        Write-Output "$computerName" 
+
+    Write-Output "" 
+# Windows OS Version    
+    # Variable for getting the Win OS Version  
+    $osVersion = (Get-CimInstance -ClassName Win32_OperatingSystem).Version
+
+    # Write the OS Version
+        Write-Output "OS Version"
+        Write-Output "----------------------" 
+        Write-Output "OS Version: $osVersion" 
+
+    Write-Output ""    
+# Processor Information (Display Name, Manufacturer, Number of Cores)
+    # Variable for getting the Computer Name
+    $processorInfo = Get-CimInstance -ClassName Win32_Processor
+
+    # Write the Processor Information
+        foreach ($processor in $processorInfo) {
+            # Display Name
+                Write-Output "Processor Information"
+                Write-Output "----------------------" 
+                Write-Output "Processor Name: $($processor.Name)"
+            # Manufactuter
+                Write-Output "Manufacturer: $($processor.Manufacturer)" 
+            # Wite the Number of Cores
+                Write-Output "Number of Cores: $($processor.NumberOfCores)"      
+        }
+        
+    Write-Output ""    
+# Amount of Physical RAM
+    # Variable for getting Physical RAM
+    $physicalMemory = (Get-CimInstance -ClassName Win32_PhysicalMemory).Capacity
+
+    # Variable to Identify the total RAM
+        $totalRAM = [Math]::Round(([array]($physicalMemory) | Measure-Object -Sum).Sum / 1GB, 2)
+
+    # Write the total RAM
+        Write-Output "Physical Memory in GB"  
+        Write-Output "----------------------" 
+        Write-Output "Total Physical RAM: $totalRAM GB" 
+    
+    Write-Output ""   
+# List all Windows Roles and Features installed on the system
+    Write-Output "Windows Roles and Features" 
+    Write-Output "----------------------"
+    $osSKU = (Get-WmiObject -Class Win32_OperatingSystem).OperatingSystemSKU
+    
+    if ($osSKU -in 7,8,9,10,12,13,14,39,40,41,42,43,44,45,48,49,50,51,58,62,63,64,65,69,72,76,84) {
+        Get-WindowsFeature | Where-Object {$_.InstallState -eq 'Installed'} | Select-Object Name
+        Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Format-Table -AutoSize
+    } else{
+        Write-Output "This is not a server"
+    }
+
+    Write-Output "" 
+# Test for whether the Remote Desktop Protocol is configured or not and write the results
+    # Registry key path
+        $regPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+
+    # Registry value name for RDP
+        $regValue = "fDenyTSConnections"
+
+    # Fetch the registry value
+        $rdpValue = (Get-ItemProperty -Path $regPath -Name $regValue).$regValue
+
+    # Check the RDP status and write the results
+    Write-Output "Remote Desktop Connection" 
+    Write-Output "----------------------" 
+
+        if ($rdpValue -eq 0) {
+            Write-Output "Remote Desktop Protocol is enabled."
+        } else {
+            Write-Output "Remote Desktop Protocol is disabled."
+        } 
+       
+    Write-Output ""
+    # Include the last 5 warning and error messages from the System and Application event logs
+    # Get last 5 warning and error messages from System event log
+        $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2,3} -MaxEvents 5
+
+    # Get last 5 warning and error messages from Application event log
+        $applicationEvents = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2,3} -MaxEvents 5
+
+        Write-Output "System Log Newest 5" 
+        Write-Output "----------------------" 
+
+        $systemEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize
+
+        Write-Output "Application Log Newest 5"
+        Write-Output "----------------------" 
+
+        $applicationEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize
+ 
+} | Out-File $fPath2 -append
+}
+
+
+#Host Name
+    $Hostname = Hostname
+
+#Get Date(MM-DD-YYYY)
+
+    $Date = Get-Date -Format MM-dd-yyyy
+
+#Folder Location?
+    $fPath = "C:\$Hostname-INV-$Date.txt"
+    
+#Report run by?
+    $RunBy = Read-Host "Type your Full Name (First Last)"
+    Write-Output "Report Run By: $RunBy" | Out-File $fPath -append
+
+Write-Output "" | Out-File $fPath -append
+Write-Output "" | Out-File $fPath -append
+
+#CSV Import/Export
+        #CSV Path
+            $csvPath = Read-Host "Type the path of the file location (C:\file.csv)"
+
+        #Import the CSV file
+            $CSV = Import-Csv -Path $csvPath
+        
+        #Export CSV to TXT file
+            Write-Output "Remote Servers" | Out-File $fPath -append
+            Write-Output "----------------------" | Out-File $fPath -append
+
+            $CSV | Format-Table | Out-String | Out-File -FilePath $fPath -append
+
+Write-Output "" | Out-File $fPath -append
+
+#Report Path
+        $filePath = $fPath
+    #Check if the file exists
+        if (-not (Test-Path -Path $filePath)) {
+            New-Item -ItemType File -Path $filePath
+            Write-Output "File was created at $filePath"
+        } else {
+            Write-Output "File already exists at $filePath"
+        }
+
+#Computer Name
+    # Variable for getting the Computer Name
+        $computerName = $env:COMPUTERNAME
+
+    # Write the Computer Name
+        Write-Output "Computer Name" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+        Write-Output "$computerName" | Out-File $fPath -append
+
+    Write-Output "" | Out-File $fPath -append
+# Windows OS Version    
+    # Variable for getting the Win OS Version  
+    $osVersion = (Get-CimInstance -ClassName Win32_OperatingSystem).Version
+
+    # Write the OS Version
+        Write-Output "OS Version" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+        Write-Output "OS Version: $osVersion" | Out-File $fPath -append
+
+    Write-Output "" | Out-File $fPath -append    
+# Processor Information (Display Name, Manufacturer, Number of Cores)
+    # Variable for getting the Computer Name
+    $processorInfo = Get-CimInstance -ClassName Win32_Processor
+
+    # Write the Processor Information
+        foreach ($processor in $processorInfo) {
+            # Display Name
+                Write-Output "Processor Information" | Out-File $fPath -append
+                Write-Output "----------------------" | Out-File $fPath -append
+                Write-Output "Processor Name: $($processor.Name)" | Out-File $fPath -append
+            # Manufactuter
+                Write-Output "Manufacturer: $($processor.Manufacturer)" | Out-File $fPath -append
+            # Wite the Number of Cores
+                Write-Output "Number of Cores: $($processor.NumberOfCores)" | Out-File $fPath -append     
+        }
+        
+    Write-Output "" | Out-File $fPath -append    
+# Amount of Physical RAM
+    # Variable for getting Physical RAM
+    $physicalMemory = (Get-CimInstance -ClassName Win32_PhysicalMemory).Capacity
+
+    # Variable to Identify the total RAM
+        $totalRAM = [Math]::Round(([array]($physicalMemory) | Measure-Object -Sum).Sum / 1GB, 2)
+
+    # Write the total RAM
+        Write-Output "Physical Memory in GB" | Out-File $fPath -append 
+        Write-Output "----------------------" | Out-File $fPath -append 
+        Write-Output "Total Physical RAM: $totalRAM GB" | Out-File $fPath -append 
+    
+    Write-Output "" | Out-File $fPath -append    
+# List all Windows Roles and Features installed on the system
+    Write-Output "Windows Roles and Features" | Out-File $fPath -append
+    Write-Output "----------------------" | Out-File $fPath -append
+    $osSKU = (Get-WmiObject -Class Win32_OperatingSystem).OperatingSystemSKU
+    
+    if ($osSKU -in 7,8,9,10,12,13,14,39,40,41,42,43,44,45,48,49,50,51,58,62,63,64,65,69,72,76,84) {
+        Get-WindowsFeature | Where-Object {$_.InstallState -eq 'Installed'} | Select-Object Name | Out-File $fPath -append 
+        Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Format-Table -AutoSize | Out-File $fPath -append
+    } else{
+        Write-Output "This is not a server" | Out-File $fPath -append
+    }
+
+    Write-Output "" | Out-File $fPath -append
+# Test for whether the Remote Desktop Protocol is configured or not and write the results
+    # Registry key path
+        $regPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+
+    # Registry value name for RDP
+        $regValue = "fDenyTSConnections"
+
+    # Fetch the registry value
+        $rdpValue = (Get-ItemProperty -Path $regPath -Name $regValue).$regValue
+
+    # Check the RDP status and write the results
+    Write-Output "Remote Desktop Connection" | Out-File $fPath -append
+    Write-Output "----------------------" | Out-File $fPath -append
+
+        if ($rdpValue -eq 0) {
+            Write-Output "Remote Desktop Protocol is enabled." | Out-File $fPath -append
+        } else {
+            Write-Output "Remote Desktop Protocol is disabled." | Out-File $fPath -append
+        } 
+       
+    Write-Output "" | Out-File $fPath -append
+# Include the last 5 warning and error messages from the System and Application event logs
+    # Get last 5 warning and error messages from System event log
+        $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2,3} -MaxEvents 5
+
+    # Get last 5 warning and error messages from Application event log
+        $applicationEvents = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2,3} -MaxEvents 5
+
+        Write-Output "System Log Newest 5" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+
+        $systemEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize | Out-File $fPath -append
+
+        Write-Output "Application Log Newest 5" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+
+        $applicationEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize | Out-File $fPath -append
+
+
+# Report for Remote Servers
+    #Script Range
+#Import the necessary .NET class for secure strigs
+    Add-Type -AssemblyName System.Security
+
+foreach ($row in $CSV) {
+
+    #Set the computername, username and password
+        $computerName = $row.computername
+        $username = $row.username
+        $password = $row.password
+        $fPath2 = "C:\$computerName-INV-$Date.txt"
+
+    #Report Run By
+    Write-Output "Report Run By: $RunBy" | Out-File $fPath2 -append
+
+    Write-Output "" | Out-File $fPath2 -append
+    Write-Output "" | Out-File $fPath2 -append
+
+
+    #Convert password to a secure string
+        $securPassword = ConvertTo-SecureString $password -AsPlainText -Force
+
+    #Create the credential
+        $cred = New-Object System.Management.Automation.PSCredential($username, $securPassword)
+
+    #Remote to servers
+    Invoke-Command -ComputerName $computerName -Credential $cred -ScriptBlock {
+
+#Computer Name
+    # Variable for getting the Computer Name
+        $computerName = $env:COMPUTERNAME
+
+    # Write the Computer Name
+        Write-Output "Computer Name" 
+        Write-Output "----------------------" 
+        Write-Output "$computerName" 
+
+    Write-Output "" 
+# Windows OS Version    
+    # Variable for getting the Win OS Version  
+    $osVersion = (Get-CimInstance -ClassName Win32_OperatingSystem).Version
+
+    # Write the OS Version
+        Write-Output "OS Version"
+        Write-Output "----------------------" 
+        Write-Output "OS Version: $osVersion" 
+
+    Write-Output ""    
+# Processor Information (Display Name, Manufacturer, Number of Cores)
+    # Variable for getting the Computer Name
+    $processorInfo = Get-CimInstance -ClassName Win32_Processor
+
+    # Write the Processor Information
+        foreach ($processor in $processorInfo) {
+            # Display Name
+                Write-Output "Processor Information"
+                Write-Output "----------------------" 
+                Write-Output "Processor Name: $($processor.Name)"
+            # Manufactuter
+                Write-Output "Manufacturer: $($processor.Manufacturer)" 
+            # Wite the Number of Cores
+                Write-Output "Number of Cores: $($processor.NumberOfCores)"      
+        }
+        
+    Write-Output ""    
+# Amount of Physical RAM
+    # Variable for getting Physical RAM
+    $physicalMemory = (Get-CimInstance -ClassName Win32_PhysicalMemory).Capacity
+
+    # Variable to Identify the total RAM
+        $totalRAM = [Math]::Round(([array]($physicalMemory) | Measure-Object -Sum).Sum / 1GB, 2)
+
+    # Write the total RAM
+        Write-Output "Physical Memory in GB"  
+        Write-Output "----------------------" 
+        Write-Output "Total Physical RAM: $totalRAM GB" 
+    
+    Write-Output ""   
+# List all Windows Roles and Features installed on the system
+    Write-Output "Windows Roles and Features" 
+    Write-Output "----------------------"
+    $osSKU = (Get-WmiObject -Class Win32_OperatingSystem).OperatingSystemSKU
+    
+    if ($osSKU -in 7,8,9,10,12,13,14,39,40,41,42,43,44,45,48,49,50,51,58,62,63,64,65,69,72,76,84) {
+        Get-WindowsFeature | Where-Object {$_.InstallState -eq 'Installed'} | Select-Object Name
+        Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Format-Table -AutoSize
+    } else{
+        Write-Output "This is not a server"
+    }
+
+    Write-Output "" 
+# Test for whether the Remote Desktop Protocol is configured or not and write the results
+    # Registry key path
+        $regPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+
+    # Registry value name for RDP
+        $regValue = "fDenyTSConnections"
+
+    # Fetch the registry value
+        $rdpValue = (Get-ItemProperty -Path $regPath -Name $regValue).$regValue
+
+    # Check the RDP status and write the results
+    Write-Output "Remote Desktop Connection" 
+    Write-Output "----------------------" 
+
+        if ($rdpValue -eq 0) {
+            Write-Output "Remote Desktop Protocol is enabled."
+        } else {
+            Write-Output "Remote Desktop Protocol is disabled."
+        } 
+       
+    Write-Output ""
+    # Include the last 5 warning and error messages from the System and Application event logs
+    # Get last 5 warning and error messages from System event log
+        $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2,3} -MaxEvents 5
+
+    # Get last 5 warning and error messages from Application event log
+        $applicationEvents = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2,3} -MaxEvents 5
+
+        Write-Output "System Log Newest 5" 
+        Write-Output "----------------------" 
+
+        $systemEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize
+
+        Write-Output "Application Log Newest 5"
+        Write-Output "----------------------" 
+
+        $applicationEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize
+ 
+} | Out-File $fPath2 -append
+}
+
+
+#Host Name
+    $Hostname = Hostname
+
+#Get Date(MM-DD-YYYY)
+
+    $Date = Get-Date -Format MM-dd-yyyy
+
+#Folder Location?
+    $fPath = "C:\$Hostname-INV-$Date.txt"
+    
+#Report run by?
+    $RunBy = Read-Host "Type your Full Name (First Last)"
+    Write-Output "Report Run By: $RunBy" | Out-File $fPath -append
+
+Write-Output "" | Out-File $fPath -append
+Write-Output "" | Out-File $fPath -append
+
+#CSV Import/Export
+        #CSV Path
+            $csvPath = Read-Host "Type the path of the file location (C:\file.csv)"
+
+        #Import the CSV file
+            $CSV = Import-Csv -Path $csvPath
+        
+        #Export CSV to TXT file
+            Write-Output "Remote Servers" | Out-File $fPath -append
+            Write-Output "----------------------" | Out-File $fPath -append
+
+            $CSV | Format-Table | Out-String | Out-File -FilePath $fPath -append
+
+Write-Output "" | Out-File $fPath -append
+
+#Report Path
+        $filePath = $fPath
+    #Check if the file exists
+        if (-not (Test-Path -Path $filePath)) {
+            New-Item -ItemType File -Path $filePath
+            Write-Output "File was created at $filePath"
+        } else {
+            Write-Output "File already exists at $filePath"
+        }
+
+#Computer Name
+    # Variable for getting the Computer Name
+        $computerName = $env:COMPUTERNAME
+
+    # Write the Computer Name
+        Write-Output "Computer Name" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+        Write-Output "$computerName" | Out-File $fPath -append
+
+    Write-Output "" | Out-File $fPath -append
+# Windows OS Version    
+    # Variable for getting the Win OS Version  
+    $osVersion = (Get-CimInstance -ClassName Win32_OperatingSystem).Version
+
+    # Write the OS Version
+        Write-Output "OS Version" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+        Write-Output "OS Version: $osVersion" | Out-File $fPath -append
+
+    Write-Output "" | Out-File $fPath -append    
+# Processor Information (Display Name, Manufacturer, Number of Cores)
+    # Variable for getting the Computer Name
+    $processorInfo = Get-CimInstance -ClassName Win32_Processor
+
+    # Write the Processor Information
+        foreach ($processor in $processorInfo) {
+            # Display Name
+                Write-Output "Processor Information" | Out-File $fPath -append
+                Write-Output "----------------------" | Out-File $fPath -append
+                Write-Output "Processor Name: $($processor.Name)" | Out-File $fPath -append
+            # Manufactuter
+                Write-Output "Manufacturer: $($processor.Manufacturer)" | Out-File $fPath -append
+            # Wite the Number of Cores
+                Write-Output "Number of Cores: $($processor.NumberOfCores)" | Out-File $fPath -append     
+        }
+        
+    Write-Output "" | Out-File $fPath -append    
+# Amount of Physical RAM
+    # Variable for getting Physical RAM
+    $physicalMemory = (Get-CimInstance -ClassName Win32_PhysicalMemory).Capacity
+
+    # Variable to Identify the total RAM
+        $totalRAM = [Math]::Round(([array]($physicalMemory) | Measure-Object -Sum).Sum / 1GB, 2)
+
+    # Write the total RAM
+        Write-Output "Physical Memory in GB" | Out-File $fPath -append 
+        Write-Output "----------------------" | Out-File $fPath -append 
+        Write-Output "Total Physical RAM: $totalRAM GB" | Out-File $fPath -append 
+    
+    Write-Output "" | Out-File $fPath -append    
+# List all Windows Roles and Features installed on the system
+    Write-Output "Windows Roles and Features" | Out-File $fPath -append
+    Write-Output "----------------------" | Out-File $fPath -append
+    $osSKU = (Get-WmiObject -Class Win32_OperatingSystem).OperatingSystemSKU
+    
+    if ($osSKU -in 7,8,9,10,12,13,14,39,40,41,42,43,44,45,48,49,50,51,58,62,63,64,65,69,72,76,84) {
+        Get-WindowsFeature | Where-Object {$_.InstallState -eq 'Installed'} | Select-Object Name | Out-File $fPath -append 
+        Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Format-Table -AutoSize | Out-File $fPath -append
+    } else{
+        Write-Output "This is not a server" | Out-File $fPath -append
+    }
+
+    Write-Output "" | Out-File $fPath -append
+# Test for whether the Remote Desktop Protocol is configured or not and write the results
+    # Registry key path
+        $regPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+
+    # Registry value name for RDP
+        $regValue = "fDenyTSConnections"
+
+    # Fetch the registry value
+        $rdpValue = (Get-ItemProperty -Path $regPath -Name $regValue).$regValue
+
+    # Check the RDP status and write the results
+    Write-Output "Remote Desktop Connection" | Out-File $fPath -append
+    Write-Output "----------------------" | Out-File $fPath -append
+
+        if ($rdpValue -eq 0) {
+            Write-Output "Remote Desktop Protocol is enabled." | Out-File $fPath -append
+        } else {
+            Write-Output "Remote Desktop Protocol is disabled." | Out-File $fPath -append
+        } 
+       
+    Write-Output "" | Out-File $fPath -append
+# Include the last 5 warning and error messages from the System and Application event logs
+    # Get last 5 warning and error messages from System event log
+        $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2,3} -MaxEvents 5
+
+    # Get last 5 warning and error messages from Application event log
+        $applicationEvents = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2,3} -MaxEvents 5
+
+        Write-Output "System Log Newest 5" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+
+        $systemEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize | Out-File $fPath -append
+
+        Write-Output "Application Log Newest 5" | Out-File $fPath -append
+        Write-Output "----------------------" | Out-File $fPath -append
+
+        $applicationEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize | Out-File $fPath -append
+
+
+# Report for Remote Servers
+    #Script Range
+#Import the necessary .NET class for secure strigs
+    Add-Type -AssemblyName System.Security
+
+foreach ($row in $CSV) {
+
+    #Set the computername, username and password
+        $computerName = $row.computername
+        $username = $row.username
+        $password = $row.password
+        $fPath2 = "C:\$computerName-INV-$Date.txt"
+
+    #Report Run By
+    Write-Output "Report Run By: $RunBy" | Out-File $fPath2 -append
+
+    Write-Output "" | Out-File $fPath2 -append
+    Write-Output "" | Out-File $fPath2 -append
+
+
+    #Convert password to a secure string
+        $securPassword = ConvertTo-SecureString $password -AsPlainText -Force
+
+    #Create the credential
+        $cred = New-Object System.Management.Automation.PSCredential($username, $securPassword)
+
+    #Remote to servers
+    Invoke-Command -ComputerName $computerName -Credential $cred -ScriptBlock {
+
+#Computer Name
+    # Variable for getting the Computer Name
+        $computerName = $env:COMPUTERNAME
+
+    # Write the Computer Name
+        Write-Output "Computer Name" 
+        Write-Output "----------------------" 
+        Write-Output "$computerName" 
+
+    Write-Output "" 
+# Windows OS Version    
+    # Variable for getting the Win OS Version  
+    $osVersion = (Get-CimInstance -ClassName Win32_OperatingSystem).Version
+
+    # Write the OS Version
+        Write-Output "OS Version"
+        Write-Output "----------------------" 
+        Write-Output "OS Version: $osVersion" 
+
+    Write-Output ""    
+# Processor Information (Display Name, Manufacturer, Number of Cores)
+    # Variable for getting the Computer Name
+    $processorInfo = Get-CimInstance -ClassName Win32_Processor
+
+    # Write the Processor Information
+        foreach ($processor in $processorInfo) {
+            # Display Name
+                Write-Output "Processor Information"
+                Write-Output "----------------------" 
+                Write-Output "Processor Name: $($processor.Name)"
+            # Manufactuter
+                Write-Output "Manufacturer: $($processor.Manufacturer)" 
+            # Wite the Number of Cores
+                Write-Output "Number of Cores: $($processor.NumberOfCores)"      
+        }
+        
+    Write-Output ""    
+# Amount of Physical RAM
+    # Variable for getting Physical RAM
+    $physicalMemory = (Get-CimInstance -ClassName Win32_PhysicalMemory).Capacity
+
+    # Variable to Identify the total RAM
+        $totalRAM = [Math]::Round(([array]($physicalMemory) | Measure-Object -Sum).Sum / 1GB, 2)
+
+    # Write the total RAM
+        Write-Output "Physical Memory in GB"  
+        Write-Output "----------------------" 
+        Write-Output "Total Physical RAM: $totalRAM GB" 
+    
+    Write-Output ""   
+# List all Windows Roles and Features installed on the system
+    Write-Output "Windows Roles and Features" 
+    Write-Output "----------------------"
+    $osSKU = (Get-WmiObject -Class Win32_OperatingSystem).OperatingSystemSKU
+    
+    if ($osSKU -in 7,8,9,10,12,13,14,39,40,41,42,43,44,45,48,49,50,51,58,62,63,64,65,69,72,76,84) {
+        Get-WindowsFeature | Where-Object {$_.InstallState -eq 'Installed'} | Select-Object Name
+        Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Format-Table -AutoSize
+    } else{
+        Write-Output "This is not a server"
+    }
+
+    Write-Output "" 
+# Test for whether the Remote Desktop Protocol is configured or not and write the results
+    # Registry key path
+        $regPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+
+    # Registry value name for RDP
+        $regValue = "fDenyTSConnections"
+
+    # Fetch the registry value
+        $rdpValue = (Get-ItemProperty -Path $regPath -Name $regValue).$regValue
+
+    # Check the RDP status and write the results
+    Write-Output "Remote Desktop Connection" 
+    Write-Output "----------------------" 
+
+        if ($rdpValue -eq 0) {
+            Write-Output "Remote Desktop Protocol is enabled."
+        } else {
+            Write-Output "Remote Desktop Protocol is disabled."
+        } 
+       
+    Write-Output ""
+    # Include the last 5 warning and error messages from the System and Application event logs
+    # Get last 5 warning and error messages from System event log
+        $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2,3} -MaxEvents 5
+
+    # Get last 5 warning and error messages from Application event log
+        $applicationEvents = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2,3} -MaxEvents 5
+
+        Write-Output "System Log Newest 5" 
+        Write-Output "----------------------" 
+
+        $systemEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize
+
+        Write-Output "Application Log Newest 5"
+        Write-Output "----------------------" 
+
+        $applicationEvents | Format-Table TimeCreated, EntryType, Id, LogName, Message -AutoSize
+ 
+} | Out-File $fPath2 -append
+}
+
+###END####################################################################
