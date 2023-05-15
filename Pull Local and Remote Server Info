@@ -1,13 +1,9 @@
-#Final Project 2.0
-
-#######################################
-#   Created By: Christopher Sprague   #
-#   Class: PowerShell(23275)          #
-#   Purpose: Final Script             #
-#      To Gather info about local     #
-#        and remote servers           #
-#   Date Created: 05/14/2023          #
-#######################################
+#############################################
+#   Created By: Christopher Sprague         #
+#   Purpose: To Gather info about local     #
+#            and remote servers             #
+#   Date Created: 05/14/2023                #
+#############################################
 
 #Host Name
     $Hostname = Hostname
