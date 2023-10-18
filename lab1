@@ -1,0 +1,52 @@
+<#
+    Created By: Christopher Sprague
+    Purpose: To gather basic info about current computer & check for a file on a remote server
+    Date Created: 10/17/2023
+    Version 1.0
+#>
+
+
+
+#Variables
+    #Get the username of the current user
+        $CurrentUser = $env:USERNAME
+    #Get the current computer name
+        $ComputerName = $env:COMPUTERNAME
+    #Get Date
+        $Date = Get-Date -Format MM-dd-yyyy
+    #Set a remote computer name
+        $RemoteComputer = Read-Host "Computer Name"
+    #Get computer credential
+        $Cred = Get-Credential
+    #File path to check
+        $FilePath = "C:\imhere.txt"
+    #If file does not exist add this content
+        $Content = "$CurrentUser created file on $Date"
+    #Define a sriptc block to check and create the file
+        $FileScriptBlock = {
+            param (
+                [string]$FilePath,
+                [string]$Content
+            )
+
+            if (Test-Path -Path $FilePath -PathType Leaf) {
+                Write-Output "The file $FilePath exists."
+            } else {
+                Write-Output "The file $FilePath does not exist. Creating it..."
+                New-Item -Path $FilePath -ItemType File -Force  
+                Write-Output "$Content" | Out-File $FilePath -Append
+            }
+        }
+
+    #Create a remote PowerShell session
+        $Session = New-PSSession -ComputerName $RemoteComputer -Credential $Cred
+
+#Execute the script block on the remote computer
+    Invoke-Command -Session $Session -ScriptBlock $FileScriptBlock -ArgumentList $FilePath, $Content
+
+#Close the remote session
+    Remove-PSSession -Session $Session
+
+
+
+#END OF SCRIPT 
