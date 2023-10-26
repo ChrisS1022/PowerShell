@@ -1,0 +1,110 @@
+<#
+    Created By: Christopher Sprague
+    Purpose: To gather basic info about current computer & check for a file on a remote server
+    Date Created: 10/17/2023
+    Version 1.3
+    Converted into a function (1.1)
+    Allow Array Inputs (1.2)
+    Accept Pipeline Objects (1.3)
+#>
+
+
+
+        function Test-File {
+            [CmdletBinding()]
+                param (
+                    [parameter(ValueFromPipeline)]
+                    [string[]]$FilePaths = ‘C:\imhere.txt’,
+
+                    [parameter(Mandatory)]
+                    [string]$ComputerName,
+
+                    [parameter(Mandatory)]
+                    [pscredential]$Credential
+                )
+            #Process block that enables the script to process a pipe in the loop
+            Begin {
+                $user = whoami
+                $Date = Get-Date -Format MM-dd-yyyy
+                $Content = "$user created file on $Date"
+                $username = "administrator"
+                $password = ConvertTo-SecureString "P@ssword" -AsPlainText -Force
+                $Cred = New-Object System.Management.Automation.PSCredential ($username, $password) 
+                $Session = New-PSSession -ComputerName $ComputerName -Credential $Cred
+            }
+
+            Process {
+                $FileScriptBlock = {
+                param (
+                    [string[]]$FilePaths,
+                    [string]$Content
+                )
+                    #Run a loop for each file specified, test if it exists, if not then create
+                    foreach ($FilePath in $FilePaths) {
+                        if (Test-Path -Path $FilePath -PathType Leaf) {
+                            Write-Output "The file $FilePath exists."
+                        } else {
+                            Write-Output "The file $FilePath does not exist. Creating it..."
+                            New-Item -Path $FilePath -ItemType File -Force  
+                            Write-Output "$Content" | Out-File $FilePath -Append
+                        }
+                    }
+                }
+
+                #Execute the script block on the remote computer
+                Invoke-Command -Session $Session -ScriptBlock $FileScriptBlock -ArgumentList $FilePaths, $Content
+            }
+
+        }
+
+
+
+        function Check-ADFeature {
+            [CmdletBinding()]
+                param (
+
+                    [parameter(Mandatory,ValueFromPipeline)]
+                    [string[]]$ComputerNames = 'Sprague-DC1',
+
+                    [parameter(Mandatory)]
+                    [pscredential]$Credential
+
+                )
+
+            Begin {
+
+                $username = "administrator"
+                $password = ConvertTo-SecureString "P@ssword" -AsPlainText -Force
+                $Cred = New-Object System.Management.Automation.PSCredential ($username, $password) 
+                $Session = New-PSSession -ComputerName $ComputerNames -Credential $Cred
+
+            }
+
+            Process {
+
+                $ServicesScriptBlock = {
+                    param (
+                        [string[]]$ComputerNames,
+                        [string]$Content
+                    )
+                    #Run a loop for each computer specified
+                    foreach ($Computer in $ComputerNames) {
+                        try {
+                            $adFeature = Get-WindowsFeature -Name AD-Domain-Services 
+                            }catch {
+                        Write-Output "Error checking $Computer. Details: $($_.Exception.Message)"
+                    }
+
+                        if ($adFeature.InstallState -eq 'Installed') {
+                            Write-Output "Active Directory Domain Services is installed on $Computer."
+                        } else {
+                            Write-Output "Active Directory Domain Services is NOT installed on $Computer."   
+                        }
+                    } 
+                }
+
+                #Execute the script block on the remote computer
+                Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $ComputerNames
+            }
+        }
+#END OF SCRIPT 
