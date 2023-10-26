@@ -1,0 +1,55 @@
+<#
+    Created By: Christopher Sprague
+    Purpose: To gather basic info about current computer & check for a file on a remote server
+    Date Created: 10/17/2023
+    Version 1.1
+#>
+
+
+
+        function Test-File {
+            [CmdletBinding()]
+                param (
+                    [parameter()]
+                    [string[]]$FilePath = ‘C:\imhere.txt’,
+
+                    [parameter(Mandatory)]
+                    [string]$ComputerName,
+
+                    [parameter(Mandatory)]
+                    [pscredential]$Credential
+                )
+
+            $user = whoami
+            $Date = Get-Date -Format MM-dd-yyyy
+            $Content = "$user created file on $Date"
+            $username = "administrator"
+            $password = ConvertTo-SecureString "P@ssword" -AsPlainText -Force
+            $Cred = New-Object System.Management.Automation.PSCredential ($username, $password) 
+            $Session = New-PSSession -ComputerName $RemoteComputer -Credential $Cred
+
+            $FileScriptBlock = {
+            param (
+                [string]$FilePath,
+                [string]$Content
+            )
+
+            foreach ($file in $FilePath) {
+                if (Test-Path -Path $FilePath -PathType Leaf) {
+                    Write-Output "The file $FilePath exists."
+                } else {
+                    Write-Output "The file $FilePath does not exist. Creating it..."
+                    New-Item -Path $FilePath -ItemType File -Force  
+                    Write-Output "$Content" | Out-File $FilePath -Append
+            }
+        }
+
+            #Execute the script block on the remote computer
+            Invoke-Command -Session $Session -ScriptBlock $FileScriptBlock -ArgumentList $FilePath, $Content
+        }
+#Close the remote session
+#    Remove-PSSession -Session $Session
+
+
+
+#END OF SCRIPT 
