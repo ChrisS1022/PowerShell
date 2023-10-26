@@ -83,16 +83,13 @@
             Process {
 
                 $ServicesScriptBlock = {
-                    param (
-                        [string[]]$ComputerNames,
-                        [string]$Content
-                    )
+                  
                     #Run a loop for each computer specified
-                    foreach ($Computer in $ComputerNames) {
+                    foreach ($Computer in $using:ComputerNames) {
                         try {
                             $adFeature = Get-WindowsFeature -Name AD-Domain-Services 
-                            }catch {
-                        Write-Output "Error checking $Computer. Details: $($_.Exception.Message)"
+                            } catch {
+                                Write-Output "Error checking $Computer. Details: $($_.Exception.Message)"
                     }
 
                         if ($adFeature.InstallState -eq 'Installed') {
@@ -104,7 +101,7 @@
                 }
 
                 #Execute the script block on the remote computer
-                Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $ComputerNames
+                Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock
             }
         }
 #END OF SCRIPT 
