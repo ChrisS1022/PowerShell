@@ -11,7 +11,7 @@
             [CmdletBinding()]
                 param (
                     [parameter()]
-                    [string[]]$FilePath = ‘C:\imhere.txt’,
+                    [string[]]$FilePaths = ‘C:\imhere.txt’,
 
                     [parameter(Mandatory)]
                     [string]$ComputerName,
@@ -26,25 +26,27 @@
             $username = "administrator"
             $password = ConvertTo-SecureString "P@ssword" -AsPlainText -Force
             $Cred = New-Object System.Management.Automation.PSCredential ($username, $password) 
-            $Session = New-PSSession -ComputerName $RemoteComputer -Credential $Cred
+            $Session = New-PSSession -ComputerName $ComputerName -Credential $Cred
 
             $FileScriptBlock = {
             param (
-                [string]$FilePath,
+                [string[]]$FilePaths,
                 [string]$Content
             )
-
-            if (Test-Path -Path $FilePath -PathType Leaf) {
-                Write-Output "The file $FilePath exists."
-            } else {
-                Write-Output "The file $FilePath does not exist. Creating it..."
-                New-Item -Path $FilePath -ItemType File -Force  
-                Write-Output "$Content" | Out-File $FilePath -Append
+                #Run a loop for each file specified, test if it exists, if not then create
+                foreach ($FilePath in $FilePaths) {
+                    if (Test-Path -Path $FilePath -PathType Leaf) {
+                        Write-Output "The file $FilePath exists."
+                    } else {
+                        Write-Output "The file $FilePath does not exist. Creating it..."
+                        New-Item -Path $FilePath -ItemType File -Force  
+                        Write-Output "$Content" | Out-File $FilePath -Append
+                    }
+                }
             }
-        }
 
             #Execute the script block on the remote computer
-            Invoke-Command -Session $Session -ScriptBlock $FileScriptBlock -ArgumentList $FilePath, $Content
+            Invoke-Command -Session $Session -ScriptBlock $FileScriptBlock -ArgumentList $FilePaths, $Content
         }
 #Close the remote session
 #    Remove-PSSession -Session $Session
