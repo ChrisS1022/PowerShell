@@ -1,45 +1,47 @@
-        function Check-ADFeature {
-            [CmdletBinding()]
-                param (
+function Check-ADFeature {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [ValidateNotNullOrEmpty()]
+        [string[]]$ComputerNames = 'Sprague-DC1',
 
-                    [parameter(Mandatory,ValueFromPipeline)]
-                    [string[]]$ComputerNames = 'Sprague-DC1',
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [pscredential]$Credential,
 
-                    [parameter(Mandatory)]
-                    [pscredential]$Credential,
-                    
-                    [Parameter(Mandatory)]
-                    [string]$FeatureName = 'AD-Domain-Services'
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$FeatureName = 'AD-Domain-Services'
+    )
 
-                )
+    foreach ($Computer in $ComputerNames) {
+        Begin {
+            $Session = New-PSSession -ComputerName $Computer -Credential $Credential -ErrorAction Stop
+        }
 
-            foreach ($Computer in $using:$ComputerNames) {
-                Begin {
-                    $Session = New-PSSession -ComputerName $ComputerNames -Credential $Credential
+        Process {
+            $ServicesScriptBlock = {
+                param($FeatureName)
+                try {
+                    $adFeature = Get-WindowsFeature -Name $FeatureName -ErrorAction Stop
+                } catch {
+                    Write-Error "Error checking $Computer. Details: $($_.Exception.Message)"
+                    return
                 }
-    
-                Process {
-                    $ServicesScriptBlock = {
-                        param($FeatureName)
-                            try {
-                                $adFeature = Get-WindowsFeature -Name $FeatureName -ErrorAction Stop
-                            } catch {
-                                Write-Host "Error checking $Computer. Details: $($_.Exception.Message)"
-                                continue
-                            }
-    
-                        if ($adFeature.InstallState -eq 'Installed') {
-                            Write-Host"Active Directory Domain Services is installed on $Computer."
-                        } else {
-                            Write-Host "Active Directory Domain Services is NOT installed on $Computer."   
-                        }
-                    } 
-                    #Execute the script block on the remote computer
-                    Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName
+
+                if ($adFeature.InstallState -eq 'Installed') {
+                    Write-Output "Active Directory Domain Services is installed on $Computer."
+                } else {
+                    Write-Output "Active Directory Domain Services is NOT installed on $Computer."   
                 }
-    
-                End {
-                    Remove-PSSession -Session $Session
-                }
-            }
-        #END OF SCRIPT 
+            } 
+            #Execute the script block on the remote computer
+            Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName
+        }
+
+        End {
+            Remove-PSSession -Session $Session
+        }
+    }
+}
+#END OF SCRIPT 
