@@ -1,47 +1,47 @@
 function Check-ADFeature {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [ValidateNotNullOrEmpty()]
-        [string[]]$ComputerNames = 'Sprague-DC1',
+        [string[]]$ComputerName = 'Sprague-DC1',
 
         [Parameter(Mandatory)]
         [ValidateNotNull()]
         [pscredential]$Credential,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [ValidateNotNullOrEmpty()]
-        [string]$FeatureName = 'AD-Domain-Services'
+        [string[]]$FeatureName = 'AD-Domain-Services'
     )
 
-    foreach ($Computer in $ComputerNames) {
-        Begin {
+    foreach ($Computer in $ComputerName) {
+        try {
             $Session = New-PSSession -ComputerName $Computer -Credential $Credential -ErrorAction Stop
+        } catch {
+            Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
+            continue
         }
 
-        Process {
+        foreach ($Feature in $FeatureName) {
             $ServicesScriptBlock = {
-                param($FeatureName)
+                param($Feature)
                 try {
-                    $adFeature = Get-WindowsFeature -Name $FeatureName -ErrorAction Stop
+                    $adFeature = Get-WindowsFeature -Name $Feature -ErrorAction Stop
                 } catch {
                     Write-Error "Error checking $Computer. Details: $($_.Exception.Message)"
                     return
                 }
 
                 if ($adFeature.InstallState -eq 'Installed') {
-                    Write-Output "Active Directory Domain Services is installed on $Computer."
+                    Write-Output "$Feature is installed on $Computer."
                 } else {
-                    Write-Output "Active Directory Domain Services is NOT installed on $Computer."   
+                    Write-Output "$Feature is NOT installed on $Computer."   
                 }
             } 
-            #Execute the script block on the remote computer
-            Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName
+
+            Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $Feature
         }
 
-        End {
-            Remove-PSSession -Session $Session
-        }
+        Remove-PSSession -Session $Session
     }
 }
-#END OF SCRIPT 
