@@ -1,16 +1,13 @@
 function Check-ADFeature {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [ValidateNotNullOrEmpty()]
-        [string[]]$ComputerName = 'Sprague-DC1',
+        [Parameter(Mandatory,ValueFromPipeline)]
+        [string[]]$ComputerName,
 
         [Parameter(Mandatory)]
-        [ValidateNotNull()]
         [pscredential]$Credential,
 
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory)]
         [string[]]$FeatureName = 'AD-Domain-Services'
     )
 
@@ -33,13 +30,13 @@ function Check-ADFeature {
                 }
 
                 if ($adFeature.InstallState -eq 'Installed') {
-                    Write-Output "$Feature is installed on $Computer."
+                    Write-Output "$Feature is installed on $env:COMPUTERNAME."
                 } else {
-                    Write-Output "$Feature is NOT installed on $Computer."   
+                    Write-Output "$Feature is NOT installed on $env:COMPUTERNAME."   
                 }
             } 
 
-            Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $Feature
+            Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $Feature,$Computer
         }
 
         Remove-PSSession -Session $Session
