@@ -1,0 +1,43 @@
+        function Check-ADFeature {
+            [CmdletBinding()]
+                param (
+                    [parameter(Mandatory,ValueFromPipeline)]
+                    [string[]]$ComputerNames = 'Sprague-DC1',
+
+                    [parameter(Mandatory)]
+                    [pscredential]$Credential,
+
+                    [Parameter(Mandatory)]
+                    [string]$FeatureName = 'AD-Domain-Services'
+
+                )
+
+            Begin {
+                $Session = New-PSSession -ComputerName $ComputerNames -Credential $Credential
+            }
+
+            Process {
+                $ServicesScriptBlock = {
+                    param($FeatureName)
+                  
+                    #Run a loop for each computer specified
+                    foreach ($Computer in $using:ComputerNames) {
+                        try {
+                            $adFeature = Get-WindowsFeature -Name $FeatureName -ErrorAction Stop
+                        } catch {
+                            Write-Output "Error checking $Computer. Details: $($_.Exception.Message)"
+                            continue
+                    }
+
+                    if ($adFeature.InstallState -eq 'Installed') {
+                        Write-Output "Active Directory Domain Services is installed on $Computer."
+                    } else {
+                        Write-Output "Active Directory Domain Services is NOT installed on $Computer."   
+                    }
+                } 
+            }
+
+            #Execute the script block on the remote computer
+            Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName
+            }
+        }
