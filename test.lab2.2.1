@@ -34,10 +34,12 @@
                             Write-Host "Active Directory Domain Services is NOT installed on $Computer."   
                         }
                     } 
+                    #Execute the script block on the remote computer
+                    Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName
                 }
     
-                #Execute the script block on the remote computer
-                Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName
+                End {
+                    Remove-PSSession -Session $Session
                 }
             }
-    #END OF SCRIPT 
+        #END OF SCRIPT 
