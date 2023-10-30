@@ -11,34 +11,36 @@ function Check-ADFeature {
         [string[]]$FeatureName = 'AD-Domain-Services'
     )
 
-    foreach ($Computer in $ComputerName) {
-        try {
-            $Session = New-PSSession -ComputerName $Computer -Credential $Credential -ErrorAction Stop
-        } catch {
-            Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
-            continue
+    Process {
+        foreach ($Computer in $ComputerName) {
+            try {
+                $Session = New-PSSession -ComputerName $Computer -Credential $Credential -ErrorAction Stop
+            } catch {
+                Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
+                continue
+            }
+
+            foreach ($Feature in $FeatureName) {
+                $ServicesScriptBlock = {
+                    param($Feature)
+                    try {
+                        $adFeature = Get-WindowsFeature -Name $Feature -ErrorAction Stop
+                    } catch {
+                        Write-Output "Error checking $Computer. Details: $($_.Exception.Message)"
+                        return
+                    }
+
+                    if ($adFeature.InstallState -eq 'Installed') {
+                        Write-Output "$Feature is installed on $env:COMPUTERNAME."
+                    } else {
+                        Write-Output "$Feature is NOT installed on $env:COMPUTERNAME."   
+                    }
+                } 
+
+                Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $Feature,$Computer
+            }
+
+            Remove-PSSession -Session $Session
         }
-
-        foreach ($Feature in $FeatureName) {
-            $ServicesScriptBlock = {
-                param($Feature)
-                try {
-                    $adFeature = Get-WindowsFeature -Name $Feature -ErrorAction Stop
-                } catch {
-                    Write-Error "Error checking $Computer. Details: $($_.Exception.Message)"
-                    return
-                }
-
-                if ($adFeature.InstallState -eq 'Installed') {
-                    Write-Output "$Feature is installed on $env:COMPUTERNAME."
-                } else {
-                    Write-Output "$Feature is NOT installed on $env:COMPUTERNAME."   
-                }
-            } 
-
-            Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $Feature,$Computer
-        }
-
-        Remove-PSSession -Session $Session
     }
 }
