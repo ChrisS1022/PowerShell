@@ -1,50 +1,43 @@
-function Check-ADFeature {
-    [CmdletBinding()]
-    param (
-        [parameter(Mandatory, ValueFromPipeline)]
-        [string[]]$ComputerNames = 'Sprague-DC1',
+        function Check-ADFeature {
+            [CmdletBinding()]
+                param (
 
-        [parameter(Mandatory)]
-        [pscredential]$Credential,
+                    [parameter(Mandatory,ValueFromPipeline)]
+                    [string[]]$ComputerNames = 'Sprague-DC1',
 
-        [Parameter(Mandatory)]
-        [string]$FeatureName = 'AD-Domain-Services'
-    )
+                    [parameter(Mandatory)]
+                    [pscredential]$Credential,
+                    
+                    [Parameter(Mandatory)]
+                    [string]$FeatureName = 'AD-Domain-Services'
 
-    try {
-        $Session = New-PSSession -ComputerName $ComputerNames -Credential $Credential -ErrorAction Stop
-    } catch {
-        Write-Error "Failed to create remote session. Details: $($_.Exception.Message)"
-        return
-    }
+                )
 
-    $ServicesScriptBlock = {
-        param($FeatureName)
-
-        # Run a loop for each computer specified
-        foreach ($Computer in $using:ComputerNames) {
-            try {
-                $adFeature = Get-WindowsFeature -Name $FeatureName -ErrorAction Stop
-            } catch {
-                Write-Host "Error checking $Computer. Details: $($_.Exception.Message)"
-                continue
+            foreach ($Computer in $using:$ComputerNames) {
+                Begin {
+                    $Session = New-PSSession -ComputerName $ComputerNames -Credential $Credential
+                }
+    
+                Process {
+                    $ServicesScriptBlock = {
+                        param($FeatureName)
+                            try {
+                                $adFeature = Get-WindowsFeature -Name $FeatureName -ErrorAction Stop
+                            } catch {
+                                Write-Host "Error checking $Computer. Details: $($_.Exception.Message)"
+                                continue
+                            }
+    
+                        if ($adFeature.InstallState -eq 'Installed') {
+                            Write-Host"Active Directory Domain Services is installed on $Computer."
+                        } else {
+                            Write-Host "Active Directory Domain Services is NOT installed on $Computer."   
+                        }
+                    } 
+                }
+    
+                #Execute the script block on the remote computer
+                Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName
+                }
             }
-
-            if ($adFeature.InstallState -eq 'Installed') {
-                Write-Host "Active Directory Domain Services is installed on $Computer."
-            } else {
-                Write-Host "Active Directory Domain Services is NOT installed on $Computer."
-            }
-        }
-    }
-
-    try {
-        # Execute the script block on the remote computer
-        Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $FeatureName -ErrorAction Stop
-    } catch {
-        Write-Error "Failed to execute script block on remote computer. Details: $($_.Exception.Message)"
-    } finally {
-        # Close the remote session
-        Remove-PSSession -Session $Session
-    }
-}
+    #END OF SCRIPT 
