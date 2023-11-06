@@ -1,16 +1,10 @@
-
-
-
-
-
-
 function Prep-PowerADDeploy {
     [CmdletBinding()]
         Param(
             [Parameter(Mandatory=$true)]
-            [string]$FilePath,
+            [string]$FilePath = 'C:\ADBuild_PS.csv',
             [Parameter(Mandatory=$true)]
-            [string]$FileToCopy,
+            [string]$FileToCopy = '\\ADVSCR-FS1\ActiveDirectory\ADBuild_PS.csv',
             [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
             [string[]]$ComputerName,
             [Parameter(Mandatory=$true)]
@@ -47,27 +41,9 @@ function Prep-PowerADDeploy {
             }
             Invoke-Command -Session $Session -ScriptBlock $PrepADDeployScriptBlock
         }
+    }
 
     End {
         Remove-PSSession -Session $Session
     }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
