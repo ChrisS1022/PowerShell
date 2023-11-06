@@ -1,0 +1,73 @@
+
+
+
+
+
+
+function Prep-PowerADDeploy {
+    [CmdletBinding()]
+        Param(
+            [Parameter(Mandatory=$true)]
+            [string]$FilePath,
+            [Parameter(Mandatory=$true)]
+            [string]$FileToCopy,
+            [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+            [string[]]$ComputerName,
+            [Parameter(Mandatory=$true)]
+            [PSCredential]$Credential
+        )
+    
+    Begin {
+        $Date = Get-Date -Format "yyyy-MM-dd"
+        $Time = Get-Date -Format "HH-mm-ss"
+        $Username = $Credential.UserName
+        $Password = $Credential.GetNetworkCredential().Password
+        $Cred = New-Object System.Management.Automation.PSCredential($Username, $Password | ConvertTo-SecureString -AsPlainText -Force)
+        $Session = New-PSSession -ComputerName $ComputerName -Credential $Cred
+        }
+
+    Process {
+        foreach ($Computer in $ComputerName) {
+            $PrepADDeployScriptBlock = {
+                try {
+                    $Session = New-PSSession -ComputerName $Computer -Credential $Cred -ErrorAction Stop
+                } catch {
+                    Write-Warning "Failed to connect to $Computer. Details: $($_.Exception.Message)"
+                    Return
+                }
+    
+                if (Test-Path -Path $FilePath -PathType "Leaf") {
+                    Write-Output "The file $FilePath exists on $Computer"
+                } else {
+                    Write-Output "The file $FilePath does not exist on $Computer"
+                    Write-Output "Copying $FileToCopy to $FilePath on $Computer"
+                    Copy-Item -Path $FileToCopy -Destination $FilePath -ToSession $Session -Force
+                }
+
+            }
+            Invoke-Command -Session $Session -ScriptBlock $PrepADDeployScriptBlock
+        }
+
+    End {
+        Remove-PSSession -Session $Session
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
