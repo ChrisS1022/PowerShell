@@ -1,0 +1,207 @@
+
+<#
+    Created By: Christopher Sprague
+    Purpose: To check if a file exists in a remote session and if not then copy a file from a shared file to the remote session
+    Date Origionally Created: 11/20/2023
+    Current Version Date: 11/20/2023
+    Current Version 1.0
+    *Major Features
+        *Sub-Features
+    --------------------------------------
+    Prep-PowerADDeploy (1.0)
+        
+#>
+
+
+function Prep-PowerADDeploy {
+    [CmdletBinding()]
+    param (
+        [parameter(ValueFromPipeline)]
+        [string[]]$FilePaths = ‘C:\ADBuild_PS.csv’,
+
+        [parameter(Mandatory)]
+        [string[]]$FileToCopy = '\\ADVSCR-FS1\ActiveDirectory\ADBuild_PS.csv',
+
+        [parameter(Mandatory,ValueFromPipeline)]
+        [string[]]$ComputerName,
+
+        [parameter(Mandatory)]
+        [pscredential]$Credential
+    )
+
+    Process {
+        foreach ($Computer in $ComputerName) {
+            try {
+                $Session = New-PSSession -ComputerName $Computer -Credential $Credential -ErrorAction Stop
+            } catch {
+                Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
+                continuea
+            }
+
+            foreach ($FilePath in $FilePaths) {
+                $FileScriptBlock = {
+                    param($FilePath)
+                    try {
+                        if (Test-Path -Path $FilePath -PathType Leaf) {
+                            Write-Output "The file $FilePath exists on $env:COMPUTERNAME."
+                        } else {
+                            Write-Output "The file $FilePath does not exist on $env:COMPUTERNAME. Creating it..."
+                        }
+                    } catch {
+                        Write-Error "Error checking $Computer. Details: $($_.Exception.Message)"
+                        return
+                    }
+                } 
+
+                try {
+                    Invoke-Command -Session $Session -ScriptBlock $FileScriptBlock -ArgumentList $FilePath
+                } catch {
+                    Write-Error "Failed to execute command on remote computer: $_"
+                }
+            }
+
+            Copy-Item -Path $FileToCopy -ToSession $Session -Destination $FilePath -Force
+        }
+    }
+}
+
+############################################################################################################################
+
+<# Function to Check if the provided service is installed on a provided remote server and install if not installed
+    To run the function, type the command:
+        Install-PowerADDeploy -ComputerName 'ComputerName' -Credential $Credential -FeatureName FeatureName
+        or (-ComputerName and -FeatureName accepts an array of names)
+        Install-PowerADDeploy -ComputerName 'ComputerName1','ComputerName2' -Credential $Credential -FeatureName 'Feature1','Feature2'
+        or (-ComputerName names can be piped)
+        'ComputerName1','ComputerName2' | Install-PowerADDeploy -Credential $Credential
+#>
+
+function Install-PowerADDeploy {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory,ValueFromPipeline)]
+        [string[]]$ComputerName,
+
+        [Parameter(Mandatory)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory)]
+        [string[]]$FeatureName
+    )
+
+    Process {
+        foreach ($Computer in $ComputerName) {
+            try {
+                $Session = New-PSSession -ComputerName $Computer -Credential $Credential -ErrorAction Stop
+            } catch {
+                Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
+                continue
+            }
+
+            foreach ($Feature in $FeatureName) {
+                $ServicesScriptBlock = {
+                    param($Feature)
+                    try {
+                        $adFeature = Get-WindowsFeature -Name $Feature -ErrorAction Stop
+                    } catch {
+                        Write-Output "Error checking $Computer. Details: $($_.Exception.Message)"
+                        return
+                    }
+
+                    if ($adFeature.InstallState -eq 'Installed') {
+                        Write-Output "$Feature is installed on $env:COMPUTERNAME."
+                    } else {
+                        Write-Output "$Feature is NOT installed on $env:COMPUTERNAME."
+                        try {
+                            Add-WindowsFeature -Name $Feature -ErrorAction Stop
+                            Write-Output "$Feature has been installed on $env:COMPUTERNAME."
+                        } catch {
+                            Write-Output "Error installing $Feature on $env:COMPUTERNAME. Details: $($_.Exception.Message)"
+                        }
+                    }
+                } 
+
+                Invoke-Command -Session $Session -ScriptBlock $ServicesScriptBlock -ArgumentList $Feature,$Computer
+            }
+
+            Remove-PSSession -Session $Session
+        }
+    }
+}
+
+##############################################################################################################################################
+
+
+<#
+    Created by:     Christopher Sprague
+    Purpose:        This script will create a new forest on a Server with Active Directory Installed.
+    Date Created:   11/22/2023
+    Current Version Date:   11/22/2023
+    Current Version:    1.0
+    *Major Features
+        *Sub Features
+    -----------------------------------------------------------------------------------------------
+    New-PowerADDeploy (1.0)
+#>
+
+
+
+function New-PowerADDeploy {
+    param(
+        [Parameter(Mandatory=$true)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory=$true)]
+        [SecureString]$SafeModePassword = 'P@ssword',
+
+        [Parameter(Mandatory=$true)]
+        [string]$ComputerName,
+
+        [Parameter(Valuefrompipeline)]
+        [string]$DomainName = 'Sprague.local',
+
+        [Parameter()]
+        [string]$DomainMode = 'WinThreshold',
+
+        [Parameter()]
+        [string]$ForestMode = 'WinThreshold'
+    )
+
+    # Get NetBIOS name
+    $splitDN = $DomainName.Split(".")
+    $NetBIOSName = $splitDN[0]
+
+    # Test connection to computer
+    try {
+        New-PSSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
+    } catch {
+        Write-Error "Failed to connect to $ComputerName. Details: $($_.Exception.Message)"
+        Continue
+    }
+
+    # Invoke Command to install AD forest
+    try {
+
+        Invoke-Command -ComputerName $ComputerName -Credential $Credential -ScriptBlock {
+
+            # Define forest parameters hashtable
+            $forestParams = @{
+                DomainName = $using:DomainName
+                DomainNetBiosName = $using:NetBIOSName
+                DomainMode = $using:DomainMode
+                ForestMode = $using:ForestMode
+                Confirm = $false
+                SafeModeAdministratorPassword = $using:SafeModePassword
+                WarningAction = 'Ignore'
+            }
+
+            # Install the AD forest
+
+            $null = Install-ADDSForest @ForestParams
+
+        } -ArgumentList $forestParams
+    } catch {
+        Write-Error "Failed to install AD forest on $ComputerName. Details: $($_.Exception.Message)"
+        Continue
+    }
+}
