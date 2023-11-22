@@ -1,0 +1,74 @@
+
+<#
+    Created by:     Christopher Sprague
+    Purpose:        This script will create a new forest on a Server with Active Directory Installed.
+    Date Created:   11/22/2023
+    Current Version Date:   11/22/2023
+    Current Version:    1.0
+    *Major Features
+        *Sub Features
+    -----------------------------------------------------------------------------------------------
+    New-PowerADDeploy (1.0)
+#>
+
+
+
+function New-PowerADDeploy {
+    param(
+        [Parameter(Mandatory=$true)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory=$true)]
+        [SecureString]$SafeModePassword = 'P@ssword',
+
+        [Parameter(Mandatory=$true)]
+        [string]$ComputerName,
+
+        [Parameter(Valuefrompipeline)]
+        [string]$DomainName = 'Sprague.local',
+
+        [Parameter()]
+        [string]$DomainMode = 'WinThreshold',
+
+        [Parameter()]
+        [string]$ForestMode = 'WinThreshold'
+    )
+
+    # Get NetBIOS name
+    $splitDN = $DomainName.Split(".")
+    $NetBIOSName = $splitDN[0]
+
+    # Test connection to computer
+    try {
+        New-PSSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
+    } catch {
+        Write-Error "Failed to connect to $ComputerName. Details: $($_.Exception.Message)"
+        Continue
+    }
+
+    # Invoke Command to install AD forest
+    try {
+
+        Invoke-Command -ComputerName $ComputerName -Credential $Credential -ScriptBlock {
+
+            # Define forest parameters hashtable
+            $forestParams = @{
+                DomainName = $using:DomainName
+                DomainNetBiosName = $using:NetBIOSName
+                DomainMode = $using:DomainMode
+                ForestMode = $using:ForestMode
+                Confirm = $false
+                SafeModeAdministratorPassword = $using:SafeModePassword
+                WarningAction = 'Ignore'
+            }
+
+            # Install the AD forest
+
+            $null = Install-ADDSForest @ForestParams
+
+        } -ArgumentList $forestParams
+    } catch {
+        Write-Error "Failed to install AD forest on $ComputerName. Details: $($_.Exception.Message)"
+        Continue
+    }
+}
