@@ -35,7 +35,7 @@ function Prep-PowerADDeploy {
                 $Session = New-PSSession -ComputerName $Computer -Credential $Credential -ErrorAction Stop
             } catch {
                 Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
-                continuea
+                continue
             }
 
             foreach ($FilePath in $FilePaths) {
