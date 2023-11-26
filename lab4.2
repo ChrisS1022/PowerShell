@@ -1,0 +1,67 @@
+
+
+$ScriptBlock = {
+    Import-Module ActiveDirectory
+
+    # Variables
+        #csvFile Path
+        $csvFile = 'C:\ADBuild_PS.csv'
+        # Import the CSV file
+        $csvData = Import-Csv -Path $csvFile
+
+    # Iterate over each row
+    foreach ($row in $csvData) {
+        #OU's
+        try {
+            # Check if the OU exists
+            $ou = Get-ADOrganizationalUnit -Filter {DistinguishedName -eq $row.OU} -ErrorAction SilentlyContinue
+        }
+        catch {
+            # If the OU doesn't exist, create it
+            if ($ou -eq $null) {
+                New-ADOrganizationalUnit -Name $row.OU -Path $row.Path
+            }
+        }
+    }
+
+    foreach ($row in $csvData) {
+        # Groups
+        try {
+            # Check if the group exists
+            $group = Get-ADGroup -Filter {Name -eq $row.Company} -ErrorAction SilentlyContinue
+        }
+        catch {
+            # If the group doesn't exist, create it
+            if ($group -eq $null) {
+                New-ADGroup -Name $row.Company -Path $row.OU -GroupCategory Security -GroupScope Global
+            }   
+        }
+    }
+
+    foreach ($row in $csvData) {
+        # Users
+        try {
+            # Check if the user exists
+            $user = Get-ADUser -Filter {SamAccountName -eq $row.SAM} -ErrorAction SilentlyContinue
+        }
+        catch {
+            # If the user doesn't exist, create it
+            if ($user -eq $null) {
+                New-ADUser -Name $row.FirstName, -Path $row.OU -SamAccountName $row.SAM -AccountPassword (ConvertTo-SecureString $row.Password -AsPlainText -Force) -Enabled $true -ChangePasswordAtLogon $false -PasswordNeverExpires $tru -DisplayName $row.DisplayName -GivenName $row.FirstName -Surname $row.LastName -Company $row.Company
+            }
+        }
+    }
+
+    foreach ($row in $csvData) {
+        # Add users to groups
+        try {
+            # Check if the user exists
+            $user = Get-ADUser -Filter {SamAccountName -eq $row.SAM} -ErrorAction SilentlyContinue
+        }
+        catch {
+            # If the user doesn't exist, create it
+            if ($user -eq $null) {
+                Add-ADGroupMember -Identity $row.Company -Members $row.SAM
+            }
+        }
+}
