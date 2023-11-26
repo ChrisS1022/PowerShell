@@ -31,7 +31,7 @@
 
 # Test connection to remote computer.
     try {
-        $Session = New-PSSession -ComputerName $Computer -Credential $Credential
+        $Session = New-PSSession -CamputerName $Computer -Credential $Credential
     }
     catch {
         Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
@@ -93,40 +93,3 @@
     }
 
 ################################################################################################################################
-
-# Remote server should reboot after the forest is deployed.  Test if the server is back online. Then Continue script.
-# Variables
-    $MaxRetries = 50
-    $RetryCount = 0
-
-# Wait for the computer to restart
-$RetryCount = 0
-do {
-    $isServerOnline = Test-NetConnection -ComputerName $Computer -InformationLevel Quiet -ErrorAction SilentlyContinue
-    if (-not $isServerOnline) {
-        Start-Sleep -Seconds 5
-        $RetryCount++
-    }
-    if ($RetryCount -ge $MaxRetries) {
-        Write-Error "$Computer is not back online after $MaxRetries retries."
-        Exit
-    }
-} while (-not $isServerOnline)
-
-# Wait for Active Directory to become operational
-$RetryCount = 0
-do {
-    $adServiceStatus = Get-WmiObject -ComputerName $Computer -Class Win32_Service -Filter "Name='NTDS'" -ErrorAction SilentlyContinue
-    $isADServiceRunning = $adServiceStatus.State -eq "Running"
-    if (-not $isADServiceRunning) {
-        Start-Sleep -Seconds 5
-        $RetryCount++
-    }
-    if ($RetryCount -ge $MaxRetries) {
-        Write-Error "Active Directory is not operational after $MaxRetries retries."
-        Exit
-    }
-} while (-not $isADServiceRunning)
-
-# Continue script
-Write-Host "$Computer is back online and Active Directory is operational."
