@@ -1,67 +1,114 @@
+<#
+    Created By: Christopher Sprague
+    Purpose:    This script run on a remote server and creates OUs, Groups, and Users based on a CSV file.
+    Date Origionally Created: 11/26/2023
+    Current Version Date: 11/26/2023
+    Current Version 1.0
+    *Major Features
+        *Sub-Features
+    --------------------------------------
 
+#>
+
+# Remove the hardset variables and uncomment the Read-Host lines to prompt for input if needed.
+    $Computer = 'Sprague-DC1'
+    # $Computer = Read-Host -Prompt 'Enter the name of the computer you want to connect to.'
+    $Username = 'administrator'
+    $Password = ConvertTo-SecureString 'P@ssword' -AsPlainText -Force
+    $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $Username, $Password
+    # $Credential = Get-Credential -Message 'Enter the credentials you want to use to connect to the remote computer.'
+
+# Test connection to remote computer.
+try {
+$Session = New-PSSession -ComputerName $Computer -Credential $Credential
+}
+catch {
+Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
+Exit
+}
 
 $ScriptBlock = {
-    Import-Module ActiveDirectory
+# Import Active Directory Module
+Import-Module ActiveDirectory
 
-    # Variables
-        #csvFile Path
-        $csvFile = 'C:\ADBuild_PS.csv'
-        # Import the CSV file
-        $csvData = Import-Csv -Path $csvFile
+# Variables
+    #csvFile Path
+    $csvFile = 'C:\ADBuild_PS.csv'
+    # Import the CSV file
+    $csvData = Import-Csv -Path $csvFile
+    $dcPath = 'DC=gffa,dc=local'
 
-    # Iterate over each row
-    foreach ($row in $csvData) {
-        #OU's
-        try {
-            # Check if the OU exists
-            $ou = Get-ADOrganizationalUnit -Filter {DistinguishedName -eq $row.OU} -ErrorAction SilentlyContinue
-        }
-        catch {
-            # If the OU doesn't exist, create it
-            if ($ou -eq $null) {
-                New-ADOrganizationalUnit -Name $row.OU -Path $row.Path
-            }
-        }
+# Counters
+$ouCounter = 0
+$groupCounter = 0
+$userCounter = 0
+
+# OUs
+foreach ($row in $csvData) {
+    $ouPath = $row.OU
+    $ouName = $ouPath.Split(',')[0].Split('=')[1]
+
+    # Check if the OU exists
+    $ouExists = Get-ADOrganizationalUnit -Filter {Name -eq $ouName} -ErrorAction SilentlyContinue
+
+    # If the OU doesn't exist, create it
+    if ($ouExists -eq $null) {
+        New-ADOrganizationalUnit -Name $ouName -Path $dcPath -ProtectedFromAccidentalDeletion $false
+        $ouCounter++
     }
+} 
 
-    foreach ($row in $csvData) {
-        # Groups
-        try {
-            # Check if the group exists
-            $group = Get-ADGroup -Filter {Name -eq $row.Company} -ErrorAction SilentlyContinue
-        }
-        catch {
-            # If the group doesn't exist, create it
-            if ($group -eq $null) {
-                New-ADGroup -Name $row.Company -Path $row.OU -GroupCategory Security -GroupScope Global
-            }   
-        }
+# Groups
+foreach ($row in $csvData) {
+    $group = $row.Company
+
+    # Check if the group exists
+    $groupExists = Get-ADGroup -Filter {Name -eq $group} -ErrorAction SilentlyContinue
+
+    # If the OU doesn't exist, create it
+    if ($groupExists -eq $null) {
+        New-ADGroup -Name $row.Company -Path $row.OU -GroupCategory Security -GroupScope Global
+        $groupCounter++
     }
-
-    foreach ($row in $csvData) {
-        # Users
-        try {
-            # Check if the user exists
-            $user = Get-ADUser -Filter {SamAccountName -eq $row.SAM} -ErrorAction SilentlyContinue
-        }
-        catch {
-            # If the user doesn't exist, create it
-            if ($user -eq $null) {
-                New-ADUser -Name $row.FirstName, -Path $row.OU -SamAccountName $row.SAM -AccountPassword (ConvertTo-SecureString $row.Password -AsPlainText -Force) -Enabled $true -ChangePasswordAtLogon $false -PasswordNeverExpires $tru -DisplayName $row.DisplayName -GivenName $row.FirstName -Surname $row.LastName -Company $row.Company
-            }
-        }
-    }
-
-    foreach ($row in $csvData) {
-        # Add users to groups
-        try {
-            # Check if the user exists
-            $user = Get-ADUser -Filter {SamAccountName -eq $row.SAM} -ErrorAction SilentlyContinue
-        }
-        catch {
-            # If the user doesn't exist, create it
-            if ($user -eq $null) {
-                Add-ADGroupMember -Identity $row.Company -Members $row.SAM
-            }
-        }
 }
+
+# Users
+foreach ($row in $csvData) {
+    $GivenName = $row.FirstName
+    $Surname = $row.LastName
+    $Company = $row.Company
+    $SamAccountName = $row.SAM
+    $AccountPassword = $row.Password
+    $Path = $row.OU
+    $Username = "$GivenName.$SurName"
+
+    # Check if the user exists
+    $userExists = Get-ADUser -Filter {Name -eq "$GivenName $Surname"} -ErrorAction SilentlyContinue
+    # If the user doesn't exist, create it
+    if ($userExists -eq $null) {
+        New-ADUser `
+        -GivenName $GivenName `
+        -Surname $Surname `
+        -Company $Company `
+        -SamAccountName $SamAccountName `
+        -AccountPassword (ConvertTo-SecureString $AccountPassword -AsPlainText -Force) `
+        -Name "$GivenName $Surname" `
+        -Path $Path `
+        -Enabled $true
+        $userCounter++
+    }
+}
+
+# Add users to groups
+foreach ($row in $csvData) {
+    $Username = $row.SAM
+    $Company = $row.Company
+    $Group = Get-ADGroup -Filter {Name -eq $Company}
+    Add-ADGroupMember -Identity $Group -Members $Username
+}
+
+# Output the number of OUs, Groups, and Users created
+Write-Output "Created $ouCounter OUs, $groupCounter Groups, and $userCounter Users."
+}
+
+Invoke-Command -ComputerName $Computer -Credential $Credential -ScriptBlock $ScriptBlock
