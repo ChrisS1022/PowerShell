@@ -1,0 +1,129 @@
+<#
+    Created By: Christopher Sprague
+    Purpose: This script will test the PowerAD script.
+    Date Origionally Created: 11/30/2023
+    Current Version Date: 11/30/2023
+    Current Version 1.0
+    *Major Features
+        *Sub-Features
+    --------------------------------------
+
+
+#>
+
+# Remove the hardset variables and uncomment the Read-Host lines to prompt for input if needed.
+$Computer = 'Sprague-DC1'
+# $Computer = Read-Host -Prompt 'Enter the name of the computer you want to connect to.'
+$Username = 'administrator'
+$Password = ConvertTo-SecureString 'P@ssword' -AsPlainText -Force
+$Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $Username, $Password
+# $Credential = Get-Credential -Message 'Enter the credentials you want to use to connect to the remote computer.'
+
+# Test connection to remote computer.
+try {
+$Session = New-PSSession -ComputerName $Computer -Credential $Credential
+}
+catch {
+Write-Error "Error connecting to $Computer. Details: $($_.Exception.Message)"
+Exit
+}
+
+# Import the Pester module.
+Import-Module -Name Pester -Force -ErrorAction SilentlyContinue
+
+Invoke-Command -ComputerName $Computer -Credential $Credential -ScriptBlock {
+    Describe 'Active Directory Deployment' {
+
+        Context 'AD Object File' {
+            It "ADBuild_PS.csv exists on the C: drive" {
+                Test-Path -Path "C:\ADBuild_PS.csv" | Should be $true
+            }
+        }
+
+        Context 'Windows Feature' {
+            It "AD-Domain-Services is installed" {
+                (Get-WindowsFeature -Name 'AD-Domain-Services').installed | Should be $true
+            }
+            It "RSAT-ADDS is installed" {
+                (Get-WindowsFeature -Name 'RSAT-ADDS').installed | Should be $true
+            }
+            It "RSAT-AD-AdminCenter is installed" {
+                (Get-WindowsFeature -Name 'RSAT-AD-AdminCenter').installed | Should be $true
+            }
+            It "RSAT-ADDS-Tools is installed" {
+                (Get-WindowsFeature -Name 'RSAT-ADDS-Tools').installed | Should be $true
+            }
+        }
+
+        Context 'Domain' {
+            It "Domain is created" {
+                Get-ADDomain -Identity 'gffa.local' | Should be $true
+            }
+            It "Forestmode is set to WinThreshold" {
+                (Get-ADForest).ForestMode | Should Be "Windows2016Forest"
+            }
+            It "DomainMode is set to WinThreshold" {
+                (Get-ADDomain -Identity 'gffa.local').DomainMode | Should Be "Windows2016Domain"
+            }
+        }
+
+        Context 'Organizational Units' {
+            It "Number of OU's created" {
+                $ous = Get-ADOrganizationalUnit -Filter *
+                $ouCounter = ($ous | Where-Object { $_.DistinguishedName -notlike '*Domain Controllers*' }).Count
+                $ouCounter | Should Be 7
+            }
+        }
+
+        Context 'Users' {
+            It "Number of Users created" {
+                $csvData = Import-Csv -Path 'C:\ADBuild_PS.csv'
+                $csvUsers = @{}
+                $adUsers = @{}
+        
+                foreach ($row in $csvData) {
+                    $ouPath = $row.OU
+                    foreach ($user in $row.SAM) {
+                        $csvUsers[$user] = $true
+                    }
+        
+                    $adUsersInOU = Get-ADUser -Filter * -SearchBase $ouPath
+                    foreach ($user in $adUsersInOU) {
+                        $adUsers[$user.SamAccountName] = $true
+                    }
+                }
+        
+                $adUserCounter = $adUsers.Keys.Count
+                $csvUserCounter = $csvUsers.Keys.Count
+        
+                $adUserCounter | Should Be $csvUserCounter
+            }
+        }
+
+        Context 'Groups' {
+            It "Number of Groups created " {
+                $csvData = Import-Csv -Path 'C:\ADBuild_PS.csv'
+                $csvGroups = @{}
+                $adGroups = @{}
+        
+                foreach ($row in $csvData) {
+                    $ouPath = $row.OU
+                    foreach ($group in $row.Company) {
+                        $csvGroups[$group] = $true
+                    }
+        
+                    $adGroupsInOU = Get-ADGroup -Filter * -SearchBase $ouPath
+                    foreach ($group in $adGroupsInOU) {
+                        $adGroups[$group.Name] = $true
+                    }
+                }
+        
+                $adGroupCounter = $adGroups.Keys.Count
+                $csvGroupCounter = $csvGroups.Keys.Count
+        
+                $adGroupCounter | Should Be $csvGroupCounter
+            }
+        }
+    }
+}
+
