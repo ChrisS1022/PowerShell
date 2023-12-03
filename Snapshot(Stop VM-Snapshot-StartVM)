@@ -1,0 +1,56 @@
+# Variables
+    # Prompt the user to enter the vCenter name or IP Address and set it to "$vCenterName"
+        $vCenterName = Read-Host -Prompt "Please enter the vCenter Name or IP Address."
+    # Set the vCenter username to the variable "$vCenterUsername".
+        $vCenterUsername = 'administrator@virt2-dom.local'
+    # Set the vCenter password to the variable "$vCenterPassword".
+        $vCenterPassword = ConvertTo-SecureString 'Pa$$W0rd' -AsPlainText -Force
+    # Set the "$vCenterUsername" and "$vCenterPassword" to the $vCenterCredential" variable.
+        $vCenterCredential = New-Object System.Management.Automation.PSCredential($vCenterUsername, $vCenterPassword)
+
+# Try-Catch-Finally to connect to the vCenter. If the connection fails, the script will exit.
+try {
+    # Connect to the vCenter
+    Connect-VIServer -Server $vCenterName -Protocol https -Credential $vCenterCredential
+
+    try {
+        # Get all VMs that start with "Win10-"
+        $vms = Get-VM | Where-Object { $_.Name -like "Win10-*" }
+        # Loop through each VM and perform the following actions:
+        foreach ($vm in $vms) {
+            try {
+                # If the VM is powered on, shut it down and wait for it to power off.
+                if ($vm.PowerState -eq 'PoweredOn') {
+                    Shutdown-VMGuest -VM $vm -Confirm:$false
+
+                    while ($vm.PowerState -eq 'PoweredOn') {
+                        $vm = Get-VM -Name $vm.Name
+                        Start-Sleep -Seconds 5
+                    }
+                }
+                # Create a snapshot of the VM    
+                New-Snapshot -VM $vm -Name (Get-Date) -Description "Snapshot" -Confirm:$false
+                
+                # If the VM is powered off, power it on and wait for VMware Tools to start.
+                if ($vm.PowerState -eq 'PoweredOff') {
+                    Start-VM -VM $vm -Confirm:$false
+                    $vm | Wait-VMTools
+                }
+            }
+            catch {
+                Write-Output "Failed to process VM $($vm.Name). Error: $_"
+            }
+        }
+    }
+    catch {
+        Write-Output "Failed to retrieve VMs. Error: $_"
+    }
+}
+catch {
+    Write-Output "Failed to connect to the vCenter. Error: $_"
+    exit
+}
+finally {
+    # Disconnect from the vCenter
+    Disconnect-VIServer -Server $vCenterName -Confirm:$false
+}
