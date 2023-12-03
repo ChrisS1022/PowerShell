@@ -1,6 +1,6 @@
 <#
     Created by: Chris Sprague
-    Purpose: This script will connect to a vCenter and user vMotion to move a VM from one host to another. Then it will place the selected host into Maintenance Mode.
+    Purpose: This script will connect to a vCenter and use vMotion to move a VM from one host to another. Then it will place the selected host into Maintenance Mode.
     Date Created: 12/3/2023
     Last Modified: 12/3/2023
 #>
