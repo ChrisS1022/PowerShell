@@ -1,0 +1,47 @@
+<#
+    Created by: Chris Sprague
+    Purpose: This script will connect to a vCenter and user vMotion to move a VM from one host to another.
+    Date Created: 12/3/2023
+    Last Modified: 12/3/2023
+#>
+# Variables
+    # Prompt the user to enter the vCenter name or IP Address and set it to "$vCenterName"
+        $vCenterName = Read-Host -Prompt "Please enter the vCenter Name or IP Address."
+    # Set the vCenter username to the variable "$vCenterUsername".
+        $vCenterUsername = 'administrator@virt2-dom.local'
+    # Set the vCenter password to the variable "$vCenterPassword".
+        $vCenterPassword = ConvertTo-SecureString 'Pa$$W0rd' -AsPlainText -Force
+    # Set the "$vCenterUsername" and "$vCenterPassword" to the $vCenterCredential" variable.
+        $vCenterCredential = New-Object System.Management.Automation.PSCredential($vCenterUsername, $vCenterPassword)
+
+# Try-Catch to attempt a connection to a vCenter and perform the imbeded script and if not output an error.
+try {
+    # Connect to the vCenter
+        Connect-VIServer -Server $vCenterName -Protocol https -Credential $vCenterCredential
+
+    try {
+        # Select the VM host to migrate from.
+            Write-Output "Select the VM host to migrate from."
+            $fromVMHost = Get-VMHost | Out-GridView -Title 'Select a VM Host' -OutputMode Single
+        # Select the VM host to migrate to.
+            Write-Output "Select the VM host to migrate to."
+            $toVMHost = Get-VMHost | Out-GridView -Title 'Select a VM Host' -OutputMode Single
+
+        # Get the VM(s) to move
+            Write-Output "Select the VM(s) to move. Hold down the CTRL key to select multiple VMs."
+            $vm = Get-VM -Location $fromVMHost | Out-GridView -Title 'Select a VM' -OutputMode Multiple
+
+        # Move the VM to the new host
+            Move-VM -VM $vm -Destination $toVMHost
+    }
+    catch {
+        Write-Output "Failed to vMotion the VM(s). Error: $_"
+    }
+    finally {
+        # Disconnect from the vCenter
+            Disconnect-VIServer -Server $vCenterName -Confirm:$false
+    }
+}
+catch {
+    Write-Output "Failed to connect to the vCenter server. Error: $_"
+}
