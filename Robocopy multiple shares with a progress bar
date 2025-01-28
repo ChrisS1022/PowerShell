@@ -1,0 +1,29 @@
+
+# Define source and destination paths
+$shares = @(
+    @{ Source = "\\si-fs01\Engine"; Destination = "D:\Engine" },
+    @{ Source = "\\si-fs01\HR"; Destination = "D:\HR" },
+    @{ Source = "\\si-fs01\Profiles"; Destination = "D:\Profiles" },
+    @{ Source = "\\si-fs01\Supply Chain"; Destination = "D:\Supply Chain" },
+    @{ Source = "\\si-fs01\Users"; Destination = "D:\Users" },
+    @{ Source = "\\si-fs01\MGMT"; Destination = "D:\MGMT" },
+    @{ Source = "\\si-fs01\Schutt-Mark"; Destination = "D:\Schutt-Mark" },
+    @{ Source = "\\si-fs01\hbs"; Destination = "D:\HBS" },
+    @{ Source = "\\si-fs01\Public"; Destination = "D:\Public" }
+)
+
+$totalShares = $shares.Count
+$currentShare = 0
+
+foreach ($share in $shares) {
+    $currentShare++
+    Write-Progress -Activity "Copying files" -Status "Processing share $currentShare of $totalShares" -PercentComplete (($currentShare / $totalShares) * 100)
+
+    $sourcePath = $share.Source
+    $destinationPath = $share.Destination
+
+    # Use robocopy to copy files from source to destination, including all security and share permissions
+    robocopy $sourcePath $destinationPath /MIR /COPYALL /SEC /SECFIX /R:3 /W:5
+}
+
+Write-Output "Files copied successfully from all shares with permissions"
