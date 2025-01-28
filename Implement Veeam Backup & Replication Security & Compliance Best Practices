@@ -1,0 +1,363 @@
+<#
+    Created By: Christopher Sprague
+    Purpose: Implement Veeam Backup & Replication Security & Compliance Best Practices.
+    Date Originally Created: 10/11/2024
+    Current Version Date: 10/11/2024
+    Current Version 1.0
+    *Major Features
+        *Sub-Features
+    --------------------------------------
+#>
+
+# Backup infrastructure security
+
+    # Remote Desktop Service (TermService) should be disabled
+
+        # Check if the Remote Desktop Service (TermService) is running
+            $service = Get-Service -Name TermService
+
+        if ($service.Status -eq 'Running') {
+        # Stop the service
+            Stop-Service -Name TermService -Force
+            Write-Output "Stopped Remote Desktop Service (TermService)"
+        }
+
+        # Disable the service to prevent it from starting automatically
+            Set-Service -Name TermService -StartupType Disabled
+            Write-Output "Disabled Remote Desktop Service (TermService)"
+
+        # Verification
+            $service = Get-Service -Name TermService
+            if ($service.Status -eq 'Stopped' -and $service.StartType -eq 'Disabled') {
+                Write-Output "Verification: Remote Desktop Service (TermService) is disabled and stopped."
+            } else {
+                Write-Output "Verification: Remote Desktop Service (TermService) is NOT disabled and stopped."
+            }
+
+    # Remote Registry Service (RemoteRegistry) should be disabled
+
+        # Check if the Remote Registry Service (RemoteRegistry) is running
+            $service = Get-Service -Name RemoteRegistry
+
+            if ($service.Status -eq 'Running') {
+                # Stop the service
+                    Stop-Service -Name RemoteRegistry -Force
+                    Write-Output "Stopped Remote Registry Service (RemoteRegistry)"
+            }
+
+        # Disable the service to prevent it from starting automatically
+            Set-Service -Name RemoteRegistry -StartupType Disabled
+            Write-Output "Disabled Remote Registry Service (RemoteRegistry)"
+
+        # Verification
+            $service = Get-Service -Name RemoteRegistry
+            if ($service.Status -eq 'Stopped' -and $service.StartType -eq 'Disabled') {
+                Write-Output "Verification: Remote Registry Service (RemoteRegistry) is disabled and stopped."
+            } else {
+                Write-Output "Verification: Remote Registry Service (RemoteRegistry) is NOT disabled and stopped."
+            }
+
+    # Windows Remote Management (WinRM) service should be disabled
+
+        # Check if the Windows Remote Management (WinRM) service is running
+            $service = Get-Service -Name WinRM
+
+            if ($service.Status -eq 'Running') {
+                # Stop the service
+                    Stop-Service -Name WinRM -Force
+                    Write-Output "Stopped Windows Remote Management (WinRM)"
+            }
+
+        # Disable the service to prevent it from starting automatically
+            Set-Service -Name WinRM -StartupType Disabled
+            Write-Output "Disabled Windows Remote Management (WinRM)"
+
+        # Verification
+            $service = Get-Service -Name WinRM
+            if ($service.Status -eq 'Stopped' -and $service.StartType -eq 'Disabled') {
+                Write-Output "Verification: Windows Remote Management (WinRM) is disabled and stopped."
+            } else {
+                Write-Output "Verification: Windows Remote Management (WinRM) is NOT disabled and stopped."
+            }
+
+    # Windows Firewall should be enabled
+
+        # Check if the Windows Firewall service exists
+            $service = Get-Service -Name MpsSvc -ErrorAction SilentlyContinue
+
+            if ($null -ne $service) {
+
+        # Check if the Windows Firewall service is running
+            if ($service.Status -eq 'Stopped') {
+                # Start the service
+                Start-Service -Name MpsSvc
+                Write-Output "Started Windows Firewall (MpsSvc)"
+            }
+
+        # Enable the private, guest, and public firewall profiles
+            Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
+            Write-Output "Enabled Windows Firewall for Domain, Public, and Private profiles"
+
+        # Verification
+            $service = Get-Service -Name MpsSvc
+            if ($service.Status -eq 'Running') {
+                Write-Output "Verification: Windows Firewall (MpsSvc) is enabled and running."
+            } else {
+                Write-Output "Verification: Windows Firewall (MpsSvc) is NOT enabled and running."
+            }
+
+            # Verify firewall profiles
+                $profiles = Get-NetFirewallProfile -Profile Domain,Public,Private
+                foreach ($profile in $profiles) {
+                    if ($profile.Enabled -eq 'True') {
+                        Write-Output "Verification: Windows Firewall for $($profile.Name) profile is enabled."
+                    } else {
+                        Write-Output "Verification: Windows Firewall for $($profile.Name) profile is NOT enabled."
+                    }
+                }
+            } else {
+                Write-Output "Windows Firewall service (MpsSvc) does not exist."
+            }
+
+    # WDigest credentials caching should be disabled
+
+        # Disable WDigest credentials caching in the registry
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest' -Name UseLogonCredential -Value 0 -Type DWord
+            Write-Output "Disabled WDigest credentials caching"
+
+        # Verification
+            $wdigestValue = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest' -Name UseLogonCredential
+            if ($wdigestValue.UseLogonCredential -eq 0) {
+                Write-Output "Verification: WDigest credentials caching is disabled."
+            } else {
+                Write-Output "Verification: WDigest credentials caching is NOT disabled."
+            }
+
+    # Disable Web Proxy Auto-Discovery service (WinHttpAutoProxySvc)
+        $service = Get-Service -Name WinHttpAutoProxySvc -ErrorAction SilentlyContinue
+
+        if (-not ($service)) {
+            Write-Output "Web Proxy Auto-Discovery service (WinHttpAutoProxySvc) not found. Installing the service..."
+            Install-WindowsFeature -Name WinHttp-Client -IncludeManagementTools -ErrorAction Stop
+            $service = Get-Service -Name WinHttpAutoProxySvc
+        }
+
+        if ($service.Status -eq 'Running') {
+            try {
+                # Stop the service by setting the Start value to 4 (Disabled) in the registry
+                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\WinHttpAutoProxySvc" -Name "Start" -Value 4 -ErrorAction Stop
+                Write-Output "Stopped Web Proxy Auto-Discovery service (WinHttpAutoProxySvc) by modifying the registry"
+            } catch {
+                Write-Output "Failed to stop Web Proxy Auto-Discovery service (WinHttpAutoProxySvc) by modifying the registry. Continuing with disabling the service..."
+            }
+        }
+
+        try {
+            # Disable the service to prevent it from starting automatically
+            Set-Service -Name WinHttpAutoProxySvc -StartupType Disabled -ErrorAction Stop
+            Write-Output "Disabled Web Proxy Auto-Discovery service (WinHttpAutoProxySvc)"
+        } catch {
+            if ($_.Exception.Message -match "Access is denied") {
+                Write-Output "Access denied. Modifying registry to disable the service..."
+
+                # Modify the registry to disable the service
+                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\WinHttpAutoProxySvc" -Name "Start" -Value 4 -ErrorAction Stop
+                Write-Output "Registry modified to disable Web Proxy Auto-Discovery service (WinHttpAutoProxySvc)"
+            } else {
+                throw $_
+            }
+        }
+
+        # Verify if the service is disabled and stopped
+            $service = Get-Service -Name WinHttpAutoProxySvc
+            if ($service.Status -eq 'Stopped' -and $service.StartType -eq 'Disabled') {
+                Write-Output "Verification: Web Proxy Auto-Discovery service (WinHttpAutoProxySvc) is disabled and stopped."
+            } else {
+                Write-Output "Verification: Web Proxy Auto-Discovery service (WinHttpAutoProxySvc) is not disabled and stopped. A restart may be required!"
+            }
+
+    # Deprecated versions of SSL and TLS should be disabled
+    
+        function Test-IsElevated {
+            $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+            $p = New-Object System.Security.Principal.WindowsPrincipal($id)
+            return $p.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+        }
+
+        if (-not (Test-IsElevated)) {
+            Write-Error -Message "Access Denied. Please run with Administrator privileges."
+            exit 1
+        }
+
+        $protocols = @(
+            @{ Protocol = 'SSL 2.0'; Value = 0; Default = 1 },
+            @{ Protocol = 'SSL 3.0'; Value = 0; Default = 1 },
+            @{ Protocol = 'TLS 1.0'; Value = 0; Default = 1 },
+            @{ Protocol = 'TLS 1.1'; Value = 0; Default = 1 },
+            @{ Protocol = 'TLS 1.2'; Value = 1; Default = 0 }
+        )
+
+        foreach ($protocol in $protocols) {
+            $regPaths = @(
+                "HKLM:SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\$($protocol.Protocol)\Server",
+                "HKLM:SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\$($protocol.Protocol)\Client"
+            )
+
+            foreach ($regPath in $regPaths) {
+                try {
+                    if (-not (Test-Path $regPath)) {
+                        New-Item -Path $regPath -Force | Out-Null
+                    }
+                    Set-ItemProperty -Path $regPath -Name 'Enabled' -Value $protocol.Value -Type DWord -Force
+                    Set-ItemProperty -Path $regPath -Name 'DisabledByDefault' -Value $protocol.Default -Type DWord -Force
+                } catch {
+                    Write-Error "Failed to update $($protocol.Protocol) at $regPath $_"
+                }
+            }
+        }
+
+        # Verification step
+            foreach ($protocol in $protocols) {
+                $regPaths = @(
+                    "HKLM:SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\$($protocol.Protocol)\Server",
+                    "HKLM:SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\$($protocol.Protocol)\Client"
+                )
+
+                foreach ($regPath in $regPaths) {
+                    try {
+                        $enabled = Get-ItemProperty -Path $regPath -Name 'Enabled' -ErrorAction Stop
+                        $disabledByDefault = Get-ItemProperty -Path $regPath -Name 'DisabledByDefault' -ErrorAction Stop
+
+                        if ($enabled.Enabled -eq $protocol.Value -and $disabledByDefault.DisabledByDefault -eq $protocol.Default) {
+                            Write-Output "$($protocol.Protocol) settings at $regPath are correct."
+                        } else {
+                            Write-Output "$($protocol.Protocol) settings at $regPath are incorrect."
+                        }
+                    } catch {
+                        Write-Error "Failed to verify $($protocol.Protocol) at $regPath $_"
+                    }
+                }
+            }
+
+    # Windows Script Host should be disabled
+
+        # Disable Windows Script Host in the registry
+            Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Script Host\Settings' -Name Enabled -Value 0 -Type DWord
+            Write-Output "Disabled Windows Script Host"
+
+        # Verification
+            $wshValue = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Script Host\Settings' -Name Enabled
+            if ($wshValue.Enabled -eq 0) {
+                Write-Output "Verification: Windows Script Host is disabled."
+            } else {
+                Write-Output "Verification: Windows Script Host is NOT disabled."
+            }
+
+    # SMBv1 protocol should be disabled
+
+        # Disable SMBv1 in the registry
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' -Name SMB1 -Value 0 -Type DWord
+            Write-Output "Disabled SMBv1"
+
+        # Verification
+            $smb1Value = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' -Name SMB1
+            if ($smb1Value.SMB1 -eq 0) {
+                Write-Output "Verification: SMBv1 is disabled."
+            } else {
+                Write-Output "Verification: SMBv1 is NOT disabled."
+            }
+
+    # Link-Local Multicast Name Resolution (LLMNR) should be disabled
+
+        # Define the registry path
+            $regPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'
+
+        # Check if the DNSClient registry key exists, if not, create it
+            if (-not (Test-Path $regPath)) {
+                New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT' -Name 'DNSClient' -Force
+                Write-Output "Created DNSClient registry key"
+            }
+
+        # Disable LLMNR in the registry
+            Set-ItemProperty -Path $regPath -Name EnableMulticast -Value 0 -Type DWord
+            Write-Output "Disabled LLMNR"
+
+        # Verification
+            $llmnrValue = Get-ItemProperty -Path $regPath -Name EnableMulticast
+            if ($llmnrValue.EnableMulticast -eq 0) {
+                Write-Output "Verification: LLMNR is disabled."
+            } else {
+                Write-Output "Verification: LLMNR is NOT disabled."
+            }
+
+    # Enable SMBv3 Signing and Encryption
+
+        # Check if running as administrator
+            if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+                Write-Error "This script requires administrator privileges."
+                exit 1
+            }
+
+        # Enable SMB Signing
+            Set-SmbServerConfiguration -RequireSecuritySignature $true -EnableSecuritySignature $true -Force
+
+        # Enable SMB Encryption
+            Set-SmbServerConfiguration -EncryptData $true -Force
+
+        # Restart the SMB Server service
+            Restart-Service -Name LanmanServer -Force
+
+        # Verification
+
+            # Verify SMB Signing
+                $smbSigning = Get-SmbServerConfiguration | Select-Object -ExpandProperty RequireSecuritySignature
+                if ($smbSigning -eq $true) {
+                    Write-Output "SMB Signing is enabled."
+                } else {
+                    Write-Output "Failed to enable SMB Signing."
+                }
+
+            # Verify SMB Encryption
+                $smbEncryption = Get-SmbServerConfiguration | Select-Object -ExpandProperty EncryptData
+                if ($smbEncryption -eq $true) {
+                    Write-Output "SMB Encryption is enabled."
+                } else {
+                    Write-Output "Failed to enable SMB Encryption."
+                }
+
+    # Local Security Authority Server Service (LSASS) should be set to run as a protected process
+
+        # Set LSASS to run as a protected process in the registry
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' -Name RunAsPPL -Value 1 -Type DWord
+            Write-Output "Set LSASS to run as a protected process"
+
+        # Verification
+            $lsassValue = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' -Name RunAsPPL
+            if ($lsassValue.RunAsPPL -eq 1) {
+                Write-Output "Verification: LSASS is set to run as a protected process."
+            } else {
+                Write-Output "Verification: LSASS is NOT set to run as a protected process."
+            }
+
+    # NetBIOS protocol should be disabled on all networks
+
+        $i = 'HKLM:\SYSTEM\CurrentControlSet\Services\netbt\Parameters\interfaces'
+        Get-ChildItem $i | ForEach-Object {
+            Set-ItemProperty -Path "$i\$($_.pschildname)" -name NetBiosOptions -value 2
+
+        # Verification
+            $netBiosOption = Get-ItemProperty -Path "$i\$($_.pschildname)" -name NetBiosOptions
+            if ($netBiosOption.NetBiosOptions -eq 2) {
+                Write-Output "NetBIOS disabled successfully for interface $($_.pschildname)"
+            } else {
+                Write-Output "Failed to disable NetBIOS for interface $($_.pschildname)"
+            }
+        }
+
+    # Prompt to restart the system
+        $restart = Read-Host "The script has completed successfully. Do you want to restart the system now? (Y/N)"
+        if ($restart -eq 'Y' -or $restart -eq 'y') {
+            Restart-Computer -Force
+        } else {
+            Write-Output "Please restart the system to apply all the changes."
+        }
